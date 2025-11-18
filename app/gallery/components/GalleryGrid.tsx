@@ -1,0 +1,136 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { PexelsPhoto } from "../page";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+interface GalleryGridProps {
+  photos: PexelsPhoto[];
+  perPage?: number;
+}
+
+export default function GalleryGrid({ photos, perPage = 30 }: GalleryGridProps) {
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<PexelsPhoto | null>(null);
+  const [loadingImages, setLoadingImages] = useState(true);
+
+  const totalPages = Math.ceil(photos.length / perPage);
+  const startIndex = (page - 1) * perPage;
+  const visiblePhotos = photos.slice(startIndex, startIndex + perPage);
+
+  useEffect(() => {
+    // نمایش skeleton برای حالت لود شدن
+    setLoadingImages(true);
+    const timer = setTimeout(() => setLoadingImages(false), 1000);
+    return () => clearTimeout(timer);
+  }, [page]);
+
+  const handleNext = () => setPage((p) => Math.min(p + 1, totalPages));
+  const handlePrev = () => setPage((p) => Math.max(p - 1, 1));
+
+  return (
+    <div className="relative w-full max-w-7xl">
+      {/* ✅ Grid Container */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-10">
+        {loadingImages
+          ? // 💫 Skeletons (شبیه نمونه رسمی shadcn)
+          Array.from({ length: perPage }).map((_, i) => (
+            <div
+              key={i}
+              className="flex flex-col space-y-3 rounded-2xl bg-white shadow-sm p-2"
+            >
+              <Skeleton className="h-64 w-full rounded-xl" />
+              <div className="space-y-2 px-2 pb-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            </div>
+          ))
+          : // 🍕 تصاویر اصلی
+          visiblePhotos.map((photo) => (
+            <div
+              key={photo.id}
+              onClick={() => setSelected(photo)}
+              className="relative overflow-hidden rounded-2xl cursor-pointer group shadow-md hover:shadow-xl transition-transform duration-500"
+            >
+              <img
+                src={photo.src.large}
+                alt={photo.alt || "Food image"}
+                className="w-full h-64 object-cover rounded-2xl group-hover:scale-110 transition-transform duration-700"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition"></div>
+            </div>
+          ))}
+      </div>
+
+      {/* ✅ Pagination Controls */}
+      <div className="flex justify-center">
+        <div className="flex justify-center mb-10">
+          <div className="bg-green-600 rounded-xl p-2 flex items-center w-full sm:w-3/4 md:w-1/2 lg:w-1/4">
+            <Pagination className="w-full">
+              <PaginationContent className="flex justify-between items-center w-full">
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={handlePrev}
+                    className={`cursor-pointer ${page === 1 ? "opacity-50 pointer-events-none" : ""
+                      }`}
+                  />
+                </PaginationItem>
+
+                <span className="px-2 sm:px-4 py-1 sm:py-2 text-gray-800 text-sm sm:text-md text-center">
+                  Page {page} of {totalPages}
+                </span>
+
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={handleNext}
+                    className={`cursor-pointer ${page === totalPages ? "opacity-50 pointer-events-none" : ""
+                      }`}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ✅ Modal (Popup) using shadcn Dialog */}
+      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
+        <DialogContent className="max-w-4xl bg-white/95 backdrop-blur-md border-none shadow-2xl rounded-3xl p-0 overflow-hidden">
+          {selected && (
+            <>
+              <DialogHeader className="p-4 border-b border-gray-100">
+                <DialogTitle className="text-lg font-semibold text-gray-800">
+                  {selected.alt || "Delicious Food"}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="relative w-full">
+                <img
+                  src={selected.src.large}
+                  alt={selected.alt}
+                  className="w-full h-[500px] object-cover rounded-b-3xl"
+                />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
