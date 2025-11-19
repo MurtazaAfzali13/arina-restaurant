@@ -3,11 +3,15 @@
 import { useEffect, useState } from 'react';
 
 import {Food } from "../domain/food.types"
-export function useMeals(branchId: string, initialCategory = 'All') {
+
+
+export function useMeals(branchId: string, initialCategory = "All") {
   const [meals, setMeals] = useState<Food[]>([]);
   const [category, setCategory] = useState<string>(initialCategory);
   const [loading, setLoading] = useState<boolean>(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
+  // 📌 گرفتن غذاها بر اساس category
   useEffect(() => {
     if (!branchId) return;
 
@@ -16,26 +20,23 @@ export function useMeals(branchId: string, initialCategory = 'All') {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        if (category && category !== 'All') params.set('category', category);
+        if (category !== "All") params.set("category", category);
 
-        const res = await fetch(`/api/branches/${encodeURIComponent(branchId)}/meals?${params.toString()}`, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
+        const res = await fetch(
+          `/api/branches/${branchId}/meals?${params.toString()}`,
+          { cache: "no-store", signal: controller.signal }
+        );
 
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown fetch error' }));
-          console.error('fetch error', err);
+          console.error("Fetch meals error");
           setMeals([]);
           return;
         }
 
         const data: Food[] = await res.json();
         setMeals(data);
-      } catch (err) {
-        if ((err as any).name === 'AbortError') return;
-        console.error('Failed to load meals:', err);
-        setMeals([]);
+      } catch (err: any) {
+        if (err.name !== "AbortError") console.error(err);
       } finally {
         setLoading(false);
       }
@@ -45,8 +46,32 @@ export function useMeals(branchId: string, initialCategory = 'All') {
     return () => controller.abort();
   }, [branchId, category]);
 
-  return { meals, category, setCategory, loading };
+  // 📌 گرفتن لیست همه دسته‌بندی‌ها از API
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const res = await fetch("/api/categories", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setCategories(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch categories");
+      }
+    };
+
+    loadCategories();
+  }, []);
+
+  return {
+    meals,
+    category,
+    setCategory,
+    loading,
+    categories, // 👈 اینو اضافه کردیم
+  };
 }
+
 
 
 export function useMeal(branchId: string, slug: string) {

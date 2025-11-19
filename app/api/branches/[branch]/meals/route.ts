@@ -5,7 +5,7 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ branch: string }> }
 ) {
-  const { branch } = await context.params; // ← ← حل مشکل اصلی
+  const { branch } = await context.params;
 
   if (!branch) {
     return NextResponse.json(
@@ -19,10 +19,21 @@ export async function GET(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const { data, error } = await supabase
+  // گرفتن category از URL
+  const { searchParams } = new URL(req.url);
+  const category = searchParams.get("category") ?? null;
+
+  // ---- Query ----
+  let query = supabase
     .from("food_items")
     .select("*")
     .eq("branch_id", branch);
+
+  if (category) {
+    query = query.eq("category", category);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json(

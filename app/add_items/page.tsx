@@ -1,7 +1,10 @@
-"use client";
+'use client';
 
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useUser } from "@/modules/food/hooks/useAdmin"; // Context ما
 import ImagePicker from "@/modules/food/components/ImagePicker";
+import CategoryDropdown from "@/components/CatagoriesDropDown";
 
 interface Branch {
   id: number;
@@ -10,16 +13,28 @@ interface Branch {
 }
 
 export default function AddFoodItem() {
+  const { isAdmin, loading: userLoading } = useUser();
+  const router = useRouter();
+
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(false);
   const [imageKey, setImageKey] = useState(0); // برای reset ImagePicker
+  const [category, setCategory] = useState("All"); // state برای CategoryDropdown
 
+  // اگر کاربر admin نبود، هدایت به login
+  useEffect(() => {
+    if (!userLoading && !isAdmin) {
+      router.push("/auth/login");
+    }
+  }, [userLoading, isAdmin, router]);
+
+  // بارگذاری Branch ها
   useEffect(() => {
     const loadBranches = async () => {
       try {
-        const response = await fetch("/api/branches");
-        if (!response.ok) throw new Error("Failed to load branches");
-        const data = (await response.json()) as Branch[];
+        const res = await fetch("/api/branches");
+        if (!res.ok) throw new Error("Failed to load branches");
+        const data = (await res.json()) as Branch[];
         setBranches(data);
       } catch (err) {
         console.error(err);
@@ -34,6 +49,7 @@ export default function AddFoodItem() {
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    formData.set("category", category); // مقدار دسته‌بندی را اضافه می‌کنیم
 
     try {
       const res = await fetch("/api/add_items", {
@@ -48,8 +64,8 @@ export default function AddFoodItem() {
 
       // ریست فرم
       e.currentTarget.reset();
-      // ریست ImagePicker
-      setImageKey((prev) => prev + 1);
+      setCategory("All"); // ریست CategoryDropdown
+      setImageKey((prev) => prev + 1); // ریست ImagePicker
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
       alert(message);
@@ -58,25 +74,29 @@ export default function AddFoodItem() {
     }
   }
 
+  if (userLoading || !isAdmin) {
+    return <p className="p-6 text-center">Loading...</p>;
+  }
+
   return (
-    <div className="mt-10 flex justify-center">
+    <div className="flex justify-center bg-gray-900 min-h-screen p-6">
       <form
-        key={imageKey} // key باعث می‌شود فرم rerender شود و ImagePicker هم reset شود
+        key={imageKey}
         onSubmit={handleSubmit}
-        className="max-w-lg space-y-6 rounded-lg bg-gray-800 p-6 text-white"
+        className="max-w-lg space-y-6 rounded-lg bg-gray-700 p-6 text-white"
       >
-        <h1 className="text-2xl font-bold">Add Meal</h1>
+        <h1 className="text-2xl font-bold text-center">Add Meal</h1>
 
         <input
           name="name"
           placeholder="Food Name"
           required
-          className="w-full rounded-lg border p-2 text-black"
+          className="w-full rounded-lg border p-2 text-white"
         />
         <textarea
           name="description"
           placeholder="Description"
-          className="w-full rounded-lg border p-2 text-black"
+          className="w-full rounded-lg border p-2 text-white"
         />
         <input
           name="price"
@@ -84,29 +104,17 @@ export default function AddFoodItem() {
           step="0.01"
           placeholder="Price"
           required
-          className="w-full rounded-lg border p-2 text-black"
+          className="w-full rounded-lg border p-2 text-white"
         />
 
-        <select
-          name="category"
-          required
-          className="w-full rounded-lg border p-2 text-black"
-        >
-          <option value="">Select Category</option>
-          <option value="Burger">🍔 Burger</option>
-          <option value="Smoothie">🍹 Smoothie</option>
-          <option value="Pizza">🍕 Pizza</option>
-          <option value="Healthy">🥗 Healthy</option>
-          <option value="Special">🍛 Special</option>
-          <option value="Dessert">🍰 Dessert</option>
-          <option value="Drink">🥤 Drink</option>
-          <option value="Traditional">🍢 Traditional</option>
-        </select>
+        {/* Category Dropdown کامپوننت */}
+        <CategoryDropdown category={category} setCategory={setCategory} />
 
+        {/* انتخاب Branch */}
         <select
           name="branch_id"
           required
-          className="w-full rounded-lg border p-2 text-black"
+          className="w-full rounded-lg border p-2 text-white"
         >
           <option value="">Select Branch</option>
           {branches.map((b) => (
@@ -116,6 +124,7 @@ export default function AddFoodItem() {
           ))}
         </select>
 
+        {/* Image Picker */}
         <ImagePicker key={imageKey} name="image" />
 
         <button

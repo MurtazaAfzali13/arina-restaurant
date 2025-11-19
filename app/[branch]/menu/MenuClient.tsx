@@ -2,33 +2,42 @@
 
 import { useMeals } from '@/modules/food/hooks/useMeals';
 import { DishCard } from '@/modules/food/components/DishCart';
+import CategoryDropdown from '@/components/CatagoriesDropDown';
 import Link from 'next/link';
+import { useUser } from '@/modules/food/hooks/useAdmin'; // Context ما
 
-export default function MenuClient({ branchId }: { branchId: string }) {
+interface MenuClientProps {
+  branchId: string;
+}
+
+export default function MenuClient({ branchId }: MenuClientProps) {
   const { meals, category, setCategory, loading } = useMeals(branchId);
+  const { isAdmin, loading: userLoading } = useUser(); // وضعیت کاربر از Context
+   console.log("status",isAdmin)
+  if (userLoading) return <p className="p-6 text-center">Loading user info...</p>;
 
   return (
     <section className="py-20 bg-gray-50 min-h-screen">
       <div className="mx-auto container px-6">
+
+        {/* عنوان و دکمه Add meals فقط برای Admin */}
         <div className="text-center mb-10">
           <h2 className="font-bold text-4xl mb-4 text-gray-900">🍽️ Branch Menu</h2>
-          <Link href="/add_items" className='bg-green-500 px-4 py-2 rounded-full'>add meals</Link>
-          <p className="text-gray-600 text-lg">Choose a category and explore meals from this branch!</p>
+
+          {isAdmin && (
+            <Link
+              href="/add_items"
+              className="bg-green-500 px-8 py-4 rounded-xl text-lg font-bold mt-4 inline-block hover:bg-green-600 transition"
+            >
+              Add meals
+            </Link>
+          )}
         </div>
 
-        <div className="flex justify-center mb-12">
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="p-4 rounded-lg border bg-green-500 text-white">
-            <option value="All">🍴 All Categories</option>
-            <option value="Burger">🍔 Burgers</option>
-            <option value="Pizza">🍕 Pizzas</option>
-            <option value="Salad">🥗 Salads</option>
-            <option value="Health Food">💚 Healthy</option>
-            <option value="Curry">🍛 Curry</option>
-            <option value="Asian">🍜 Asian</option>
-            <option value="Pasta">🍝 Pasta</option>
-          </select>
-        </div>
+        {/* Dropdown دسته‌بندی */}
+        <CategoryDropdown category={category} setCategory={setCategory} />
 
+        {/* نمایش غذاها */}
         {loading ? (
           <p className="text-center text-gray-500 text-lg">Loading meals...</p>
         ) : meals.length > 0 ? (

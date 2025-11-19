@@ -10,16 +10,46 @@ function generateSlug(name: string) {
     name
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, "-")      // فاصله‌ها به -
-      .replace(/[^\w-]+/g, "")   // کاراکترهای غیرمجاز حذف شوند
-      + "-" + Date.now()          // اضافه کردن timestamp برای uniqueness
+      .replace(/\s+/g, "-")
+      .replace(/[^\w-]+/g, "") +
+    "-" +
+    Date.now()
   );
 }
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
+    // گرفتن هدر Authorization (Bearer token)
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
+    const token = authHeader.split(" ")[1];
+
+    // بررسی Session و گرفتن پروفایل
+    const { data: { user }, error: sessionError } = await supabaseServer.auth.getUser(token);
+
+    if (sessionError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabaseServer
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (profile.role !== "admin") {
+      return NextResponse.json({ error: "Access denied. Admins only." }, { status: 403 });
+    }
+
+    // ادامه ثبت غذا
+    const formData = await req.formData();
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const price = parseFloat(formData.get("price") as string);
@@ -31,7 +61,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "فیلدهای اجباری پر نشده‌اند." }, { status: 400 });
     }
 
-    let imagePath = "/images/meals/default.jpg"; // عکس پیش‌فرض
+    let imagePath = "/images/meals/default.jpg";
 
     if (image && image.size > 0) {
       if (image.size > 5 * 1024 * 1024) {
@@ -39,7 +69,6 @@ export async function POST(req: Request) {
       }
 
       const buffer = Buffer.from(await image.arrayBuffer());
-
       const optimizedBuffer = await sharp(buffer)
         .resize(1024, 1024, { fit: "inside" })
         .jpeg({ quality: 85 })
@@ -54,14 +83,12 @@ export async function POST(req: Request) {
       imagePath = `/images/meals/${fileName}`;
     }
 
-    // تولید slug از نام غذا
     const slug = generateSlug(name);
 
-    // ذخیره در Supabase
     const { data, error } = await supabaseServer.from("food_items").insert([
       {
         name,
-        slug,           // اضافه شد
+        slug,
         description,
         price,
         category,

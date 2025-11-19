@@ -1,6 +1,7 @@
 'use client';
 
 import { Users, Clock, Coffee } from "lucide-react";
+import Image from "next/image";
 
 const stats = [
   { value: "25+", label: "Years", icon: Clock, bgColor: "bg-green-100", iconColor: "text-green-500" },
@@ -85,10 +86,12 @@ export default function Hero() {
           {/* --- RIGHT CONTENT (Floating Image) --- */}
           <div className="relative lg:w-1/2 flex justify-center lg:justify-end mb-10 lg:mb-0">
             <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto animate-[float_6s_ease-in-out_infinite]">
-              <img
+              <Image
                 src="/images/logo/menu-item-1.png"
                 alt="Hero Image"
-                className="relative z-10 w-full rounded-2xl shadow-2xl object-cover"
+                className="relative z-10 w-full rounded-2xl shadow-2xl object-cover rounded-full"
+                width={500}
+                height={500}
               />
 
               {/* Decorative Circles */}
