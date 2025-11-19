@@ -51,7 +51,7 @@ export default function MealDetailPage() {
 
   return (
     <section className="w-full mt-(-10)">
-      <div className="max-w-4xl mx-auto mt-24 p-6 bg-gray-400 rounded-2xl shadow">
+      <div className="max-w-4xl mx-auto mt-24 p-20 bg-gray-700 rounded-2xl shadow">
 
         <Link
           href={`/${branch}/menu`}
@@ -60,7 +60,7 @@ export default function MealDetailPage() {
           ← Back to menu
         </Link>
 
-        <h1 className="text-3xl font-bold mb-4">{meal.name}</h1>
+        <h1 className="text-3xl font-bold mb-4 text-white">{meal.name}</h1>
 
         {/* عکس با لینک modal */}
         <button
@@ -74,7 +74,7 @@ export default function MealDetailPage() {
           />
         </button>
 
-        <p className="mt-4 text-black text-lg">{meal.description}</p>
+        <p className="mt-4 text-white text-lg">{meal.description}</p>
 
         <p className="mt-4 text-yellow-500 font-bold text-2xl">
           ${meal.price}

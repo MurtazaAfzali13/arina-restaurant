@@ -2,6 +2,7 @@
 
 import { useMeals } from '@/modules/food/hooks/useMeals';
 import { DishCard } from '@/modules/food/components/DishCart';
+import Link from 'next/link';
 
 export default function MenuClient({ branchId }: { branchId: string }) {
   const { meals, category, setCategory, loading } = useMeals(branchId);
@@ -11,6 +12,7 @@ export default function MenuClient({ branchId }: { branchId: string }) {
       <div className="mx-auto container px-6">
         <div className="text-center mb-10">
           <h2 className="font-bold text-4xl mb-4 text-gray-900">🍽️ Branch Menu</h2>
+          <Link href="/add_items" className='bg-green-500 px-4 py-2 rounded-full'>add meals</Link>
           <p className="text-gray-600 text-lg">Choose a category and explore meals from this branch!</p>
         </div>
 

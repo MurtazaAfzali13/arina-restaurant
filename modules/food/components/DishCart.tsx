@@ -63,7 +63,7 @@ export function DishCard({ dish, branchSlug }: DishCardProps) {
 
           <button
             onClick={addToCart}
-            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-blue-600 shadow hover:bg-blue-50 cursor-pointer transition"
+            className="rounded-full bg-green-500 px-4 py-2 test-sm  font-medium font-bold text-white shadow hover:bg-green-700 cursor-pointer transition"
           >
             {existingQuantity > 0 ? `Add more (${existingQuantity})` : "Add to Cart"}
           </button>
