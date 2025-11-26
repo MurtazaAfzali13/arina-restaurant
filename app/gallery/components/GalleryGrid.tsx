@@ -114,11 +114,7 @@ export default function GalleryGrid({ photos, perPage = 30 }: GalleryGridProps) 
         <DialogContent className="max-w-4xl bg-white/95 backdrop-blur-md border-none shadow-2xl rounded-3xl p-0 overflow-hidden">
           {selected && (
             <>
-              <DialogHeader className="p-4 border-b border-gray-100">
-                <DialogTitle className="text-lg font-semibold text-gray-800">
-                  {selected.alt || "Delicious Food"}
-                </DialogTitle>
-              </DialogHeader>
+            
 
               <div className="relative w-full">
                 <img

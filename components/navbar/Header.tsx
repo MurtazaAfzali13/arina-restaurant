@@ -10,7 +10,8 @@ import {
   X,
   LogOut,
   LogIn,
-  Box
+  Box,
+  ShoppingCart
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { useCart } from "@/Contexts/CartContext";
@@ -288,7 +289,7 @@ export default function Navbar() {
             </Link>
           )}
 
-          {/* Cart Button */}
+          {/* Cart Button - Desktop */}
           <div className="relative">
             <button
               onClick={handleCartToggle}
@@ -356,18 +357,129 @@ export default function Navbar() {
 
         </div>
 
-        {/* Mobile Toggle */}
-        <button
-          onClick={() => setMobileOpen(prev => !prev)}
-          className="lg:hidden text-white"
-        >
-          {mobileOpen ? <X size={28} /> : <MenuIcon size={28} />}
-        </button>
+        {/* Mobile Header - شامل دکمه کارت و منو */}
+        <div className="lg:hidden flex items-center space-x-4">
+          
+          {/* Cart Button - Mobile */}
+          <div className="relative">
+            <button
+              onClick={handleCartToggle}
+              className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20"
+            >
+              <ShoppingCart size={20} />
+              {isClient && totalItems > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+
+            {/* Mobile Cart Dropdown */}
+            {cartOpen && (
+              <div className="fixed inset-0 z-[100] bg-black bg-opacity-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-hidden">
+                  <div className="flex justify-between items-center p-4 border-b">
+                    <h3 className="text-lg font-bold text-gray-900">Your Cart</h3>
+                    <button
+                      onClick={() => setCartOpen(false)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  
+                  <div className="p-4 overflow-y-auto max-h-[60vh]">
+                    {cartItems.length === 0 ? (
+                      <p className="text-center text-gray-500 py-8">Your cart is empty</p>
+                    ) : (
+                      <>
+                        <ul className="space-y-3">
+                          {cartItems.map(item => (
+                            <li key={`${item.id}-${item.branchId}`} className="flex items-center gap-3 rounded-xl bg-gray-100 p-3">
+                              {item.imageUrl ? (
+                                <Image src={item.imageUrl} alt={item.name} width={48} height={48} className="h-12 w-12 rounded-lg object-cover" />
+                              ) : (
+                                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white text-xs text-gray-500">No image</div>
+                              )}
+                              <div className="flex flex-1 flex-col text-sm">
+                                <span className="font-semibold">{item.name}</span>
+                                <span className="text-gray-500">Qty: {item.quantity} · ${item.price.toFixed(2)}</span>
+                              </div>
+                              <button
+                                className="text-xs font-semibold text-red-500"
+                                onClick={() => removeFromCart(item.id, item.branchId)}
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        
+                        <div className="mt-4 border-t pt-3 text-sm">
+                          <div className="flex justify-between font-semibold mb-2">
+                            <span>Total items</span>
+                            <span>{totalItems}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-gray-800 mb-4">
+                            <span>Subtotal</span>
+                            <span>${totalPrice.toFixed(2)}</span>
+                          </div>
+                          <Link
+                            href="/cart"
+                            onClick={() => setCartOpen(false)}
+                            className="w-full inline-flex justify-center rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700"
+                          >
+                            Review Order
+                          </Link>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setMobileOpen(prev => !prev)}
+            className="text-white"
+          >
+            {mobileOpen ? <X size={28} /> : <MenuIcon size={28} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="lg:hidden bg-black/95 text-white px-4 py-4 space-y-2">
+          
+          {/* City Dropdown - Mobile */}
+          <div className="space-y-2">
+            <button
+              onClick={() => setCityOpen(prev => !prev)}
+              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
+            >
+              Select Branch <ChevronDown size={16} />
+            </button>
+            {cityOpen && (
+              <div className="ml-4 space-y-1">
+                {cities.map(city => (
+                  <button
+                    key={city.id}
+                    onClick={() => {
+                      handleCitySelect(city.id);
+                      setMobileOpen(false);
+                    }}
+                    className="block w-full text-left px-3 py-2 hover:text-emerald-300"
+                  >
+                    {city.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Mobile Menu Items */}
           {navItems.map(item =>
             item.name === "Menu" ? (
@@ -411,7 +523,7 @@ export default function Navbar() {
             )
           )}
 
-          {/* Login / Logout Mobile - بدون نمایش اطلاعات کاربر */}
+          {/* Login / Logout Mobile */}
           {user ? (
             <button
               onClick={() => {
