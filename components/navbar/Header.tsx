@@ -11,7 +11,8 @@ import {
   LogOut,
   LogIn,
   Box,
-  ShoppingCart
+  ShoppingCart,
+  Building
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { useCart } from "@/Contexts/CartContext";
@@ -47,8 +48,10 @@ export default function Navbar() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
+  const [branchesDropdownOpen, setBranchesDropdownOpen] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileBranchesOpen, setMobileBranchesOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -70,16 +73,10 @@ export default function Navbar() {
 
   // آیتم‌های منوی اصلی
   const baseNavItems = [
-    { name: "Menu", href: "#" },
+  
     { name: "About", href: "/about" },
     { name: "Gallery", href: "/gallery" },
   ];
-
-  // آیتم مخصوص Super Admin
-  const adminNavItem = { 
-    name: "Set Branch Admin", 
-    href: "/dashboard/set_branch_admin" 
-  };
 
   useEffect(() => {
     setIsClient(true);
@@ -97,21 +94,37 @@ export default function Navbar() {
   }, [pathname]);
 
   // دریافت کاربر و پروفایل
+  // در بخش دریافت کاربر و پروفایل
   useEffect(() => {
     async function loadUserAndProfile() {
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("Session error:", sessionError);
+        return;
+      }
+
       const currentUser = sessionData.session?.user;
       setUser(currentUser || null);
 
       if (currentUser) {
-        // دریافت پروفایل کاربر
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("id, email, role, full_name")
-          .eq("id", currentUser.id)
-          .single();
-        
-        setProfile(profileData);
+        try {
+          // دریافت پروفایل کاربر
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("id, email, role, full_name")
+            .eq("id", currentUser.id)
+            .single();
+
+          if (profileError) {
+            console.error("Profile error:", profileError);
+            return;
+          }
+
+          setProfile(profileData);
+        } catch (err) {
+          console.error("Error loading profile:", err);
+        }
       } else {
         setProfile(null);
       }
@@ -126,14 +139,23 @@ export default function Navbar() {
         setUser(currentUser || null);
 
         if (currentUser) {
-          // دریافت پروفایل کاربر
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("id, email, role, full_name")
-            .eq("id", currentUser.id)
-            .single();
-          
-          setProfile(profileData);
+          try {
+            // دریافت پروفایل کاربر
+            const { data: profileData, error: profileError } = await supabase
+              .from("profiles")
+              .select("id, email, role, full_name")
+              .eq("id", currentUser.id)
+              .single();
+
+            if (profileError) {
+              console.error("Profile error:", profileError);
+              return;
+            }
+
+            setProfile(profileData);
+          } catch (err) {
+            console.error("Error loading profile:", err);
+          }
         } else {
           setProfile(null);
         }
@@ -185,11 +207,6 @@ export default function Navbar() {
   // بررسی آیا کاربر Super Admin است
   const isSuperAdmin = profile?.role === 'super_admin';
 
-  // ترکیب آیتم‌های منو بر اساس نقش کاربر
-  const navItems = isSuperAdmin 
-    ? [...baseNavItems, adminNavItem]
-    : baseNavItems;
-
   return (
     <nav className={`fixed w-full z-50 transition-colors duration-300 ${scrolled ? "bg-black shadow-md" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
@@ -228,51 +245,96 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Menu Items */}
-          {navItems.map(item =>
-            item.name === "Menu" ? (
-              <div key={item.name} className="relative">
-                <button
-                  onClick={() => setMenuOpen(prev => !prev)}
-                  className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300"
-                >
-                  Menu <ChevronDown size={16} />
-                </button>
+          {/* Menu Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen(prev => !prev)}
+              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300"
+            >
+              Menu <ChevronDown size={16} />
+            </button>
 
-                {menuOpen && (
-                  <div className="absolute top-full mt-2 w-48 bg-white text-black shadow-lg rounded-md z-50">
-                    {loadingBranches ? (
-                      <p className="p-3">Loading...</p>
-                    ) : (
-                      branches.map(branch => (
-                        <button
-                          key={branch.id}
-                          onClick={() => handleBranchClick(branch.id)}
-                          className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-                        >
-                          {branch.name}{branch.location ? ` (${branch.location})` : ""}
-                        </button>
-                      ))
-                    )}
-                  </div>
+            {menuOpen && (
+              <div className="absolute top-full mt-2 w-48 bg-white text-black shadow-lg rounded-md z-50">
+                {loadingBranches ? (
+                  <p className="p-3">Loading...</p>
+                ) : (
+                  branches.map(branch => (
+                    <button
+                      key={branch.id}
+                      onClick={() => handleBranchClick(branch.id)}
+                      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                    >
+                      {branch.name}{branch.location ? ` (${branch.location})` : ""}
+                    </button>
+                  ))
                 )}
               </div>
-            ) : (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`px-3 py-2 font-semibold hover:text-emerald-300 text-white ${pathname === item.href ? "text-emerald-300" : ""}`}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setCityOpen(false);
-                }}
+            )}
+          </div>
+
+          {/* Regular Menu Items */}
+          {baseNavItems.map(item => (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`px-3 py-2 font-semibold hover:text-emerald-300 text-white ${pathname === item.href ? "text-emerald-300" : ""}`}
+              onClick={() => {
+                setMenuOpen(false);
+                setCityOpen(false);
+                setBranchesDropdownOpen(false);
+              }}
+            >
+              {item.name}
+            </Link>
+          ))}
+
+          {/* Branches Management Dropdown - فقط برای Super Admin */}
+          {isSuperAdmin && (
+            <div className="relative">
+              <button
+                onClick={() => setBranchesDropdownOpen(prev => !prev)}
+                className="flex items-center gap-1 px-3 py-2 font-semibold text-white hover:text-emerald-300"
               >
-                {item.name}
-              </Link>
-            )
+                <Building size={16} />
+                Branches
+                <ChevronDown size={16} />
+              </button>
+
+              {branchesDropdownOpen && (
+                <div className="absolute top-full mt-2 w-56 bg-white text-black shadow-lg rounded-md z-50">
+                  <Link
+                    href="/dashboard/add_branch"  // تغییر به add_branch
+                    className="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200"
+                    onClick={() => setBranchesDropdownOpen(false)}
+                  >
+                    <div className="font-medium">Add New Branch</div>
+                    <div className="text-sm text-gray-500">Create a new branch</div>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/manage_branches"  // تغییر به manage_branches
+                    className="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200"
+                    onClick={() => setBranchesDropdownOpen(false)}
+                  >
+                    <div className="font-medium">Manage Branches</div>
+                    <div className="text-sm text-gray-500">View, edit, and delete branches</div>
+                  </Link>
+
+                  <Link
+                    href="/dashboard/set_branch_admin"
+                    className="block px-4 py-3 hover:bg-gray-100"
+                    onClick={() => setBranchesDropdownOpen(false)}
+                  >
+                    <div className="font-medium">Set Branch Admin</div>
+                    <div className="text-sm text-gray-500">Assign admins to branches</div>
+                  </Link>
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Login / Logout - بدون نمایش نام کاربر */}
+          {/* Login / Logout */}
           {user ? (
             <button
               onClick={logout}
@@ -359,7 +421,7 @@ export default function Navbar() {
 
         {/* Mobile Header - شامل دکمه کارت و منو */}
         <div className="lg:hidden flex items-center space-x-4">
-          
+
           {/* Cart Button - Mobile */}
           <div className="relative">
             <button
@@ -387,7 +449,7 @@ export default function Navbar() {
                       <X size={20} />
                     </button>
                   </div>
-                  
+
                   <div className="p-4 overflow-y-auto max-h-[60vh]">
                     {cartItems.length === 0 ? (
                       <p className="text-center text-gray-500 py-8">Your cart is empty</p>
@@ -414,7 +476,7 @@ export default function Navbar() {
                             </li>
                           ))}
                         </ul>
-                        
+
                         <div className="mt-4 border-t pt-3 text-sm">
                           <div className="flex justify-between font-semibold mb-2">
                             <span>Total items</span>
@@ -453,7 +515,7 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="lg:hidden bg-black/95 text-white px-4 py-4 space-y-2">
-          
+
           {/* City Dropdown - Mobile */}
           <div className="space-y-2">
             <button
@@ -480,49 +542,87 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Items */}
-          {navItems.map(item =>
-            item.name === "Menu" ? (
-              <div key={item.name} className="space-y-2">
-                <button
-                  onClick={() => setMenuOpen(prev => !prev)}
-                  className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
-                >
-                  Menu <ChevronDown size={16} />
-                </button>
-                {menuOpen && (
-                  <div className="ml-4 space-y-1">
-                    {loadingBranches ? (
-                      <p className="p-2">Loading...</p>
-                    ) : (
-                      branches.map(branch => (
-                        <button
-                          key={branch.id}
-                          onClick={() => {
-                            handleBranchClick(branch.id);
-                            setMobileOpen(false);
-                          }}
-                          className="block w-full text-left px-3 py-2 hover:text-emerald-300"
-                        >
-                          {branch.name}{branch.location ? ` (${branch.location})` : ""}
-                        </button>
-                      ))
-                    )}
-                  </div>
+          {/* Menu Dropdown - Mobile */}
+          <div className="space-y-2">
+            <button
+              onClick={() => setMenuOpen(prev => !prev)}
+              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
+            >
+              Menu <ChevronDown size={16} />
+            </button>
+            {menuOpen && (
+              <div className="ml-4 space-y-1">
+                {loadingBranches ? (
+                  <p className="p-2">Loading...</p>
+                ) : (
+                  branches.map(branch => (
+                    <button
+                      key={branch.id}
+                      onClick={() => {
+                        handleBranchClick(branch.id);
+                        setMobileOpen(false);
+                      }}
+                      className="block w-full text-left px-3 py-2 hover:text-emerald-300"
+                    >
+                      {branch.name}{branch.location ? ` (${branch.location})` : ""}
+                    </button>
+                  ))
                 )}
               </div>
-            ) : (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="block px-3 py-2 font-semibold hover:text-emerald-300"
-                onClick={() => setMobileOpen(false)}
-              >
-                {item.name}
-              </Link>
-            )
-          )}
+            )}
+          </div>
 
+          {/* Regular Menu Items - Mobile */}
+          {baseNavItems.map(item => (
+            <Link
+              key={item.name}
+              href={item.href}
+              className="block px-3 py-2 font-semibold hover:text-emerald-300"
+              onClick={() => setMobileOpen(false)}
+            >
+              {item.name}
+            </Link>
+          ))}
+
+          {/* Branches Management - Mobile (فقط برای Super Admin) */}
+
+          {isSuperAdmin && (
+            <div className="space-y-2">
+              <button
+                onClick={() => setMobileBranchesOpen(prev => !prev)}
+                className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
+              >
+                <Building size={16} />
+                Branches Management
+                <ChevronDown size={16} />
+              </button>
+              {mobileBranchesOpen && (
+                <div className="ml-4 space-y-1">
+                  <Link
+                    href="/dashboard/add_branch"  // تغییر از add-branch به add_branch
+                    className="block px-3 py-2 hover:text-emerald-300"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Add New Branch
+                  </Link>
+                  <Link
+                    href="/dashboard/manage_branches"  // تغییر از manage-branches به manage_branches
+                    className="block px-3 py-2 hover:text-emerald-300"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Manage Branches
+                  </Link>
+                  <Link
+                    href="/dashboard/set_branch_admin"
+                    className="block px-3 py-2 hover:text-emerald-300"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Set Branch Admin
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
           {/* Login / Logout Mobile */}
           {user ? (
             <button
