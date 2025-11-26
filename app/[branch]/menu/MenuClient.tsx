@@ -1,3 +1,4 @@
+"use client"
 import { useMeals } from '@/modules/food/hooks/useMeals';
 import { DishCard } from '@/modules/food/components/DishCart';
 import CategoryDropdown from '@/components/CatagoriesDropDown';
