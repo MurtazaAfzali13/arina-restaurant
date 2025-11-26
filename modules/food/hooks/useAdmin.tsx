@@ -1,9 +1,11 @@
+// در useAdmin.ts
 'use client';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { UserProfile } from '../domain/food.types';
 
 interface UserContextType {
+  user: any; // اضافه کردن user
   profile?: UserProfile;
   isBranchAdmin: boolean;
   isSuperAdmin: boolean;
@@ -14,6 +16,7 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType>({
+  user: null, // مقدار پیش‌فرض
   isBranchAdmin: false,
   isSuperAdmin: false,
   isCustomer: false,
@@ -23,6 +26,7 @@ const UserContext = createContext<UserContextType>({
 });
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<any>(null); // اضافه کردن state برای user
   const [profile, setProfile] = useState<UserProfile>();
   const [loading, setLoading] = useState(true);
   const supabase = createClientComponentClient();
@@ -31,9 +35,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
 
     const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
+    const currentUser = session?.user;
+    setUser(currentUser || null); // ذخیره user
 
-    if (!user) {
+    if (!currentUser) {
       setProfile(undefined);
       setLoading(false);
       return;
@@ -42,7 +47,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', currentUser.id)
       .single();
 
     if (error) {
@@ -69,6 +74,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   return (
     <UserContext.Provider
       value={{
+        user, // اضافه کردن user به context
         profile,
         isSuperAdmin: profile?.role === 'super_admin',
         isBranchAdmin: profile?.role === 'branch_admin',

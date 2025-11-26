@@ -57,6 +57,7 @@ export default function Navbar() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // اضافه کردن state برای loading
 
   const router = useRouter();
   const pathname = usePathname();
@@ -71,16 +72,60 @@ export default function Navbar() {
     { id: 2, name: "Herat" },
   ];
 
-  // آیتم‌های منوی اصلی
   const baseNavItems = [
-  
     { name: "About", href: "/about" },
     { name: "Gallery", href: "/gallery" },
   ];
 
   useEffect(() => {
     setIsClient(true);
+    checkAuth();
   }, []);
+
+  // تابع برای بررسی وضعیت احراز هویت
+  const checkAuth = async () => {
+    try {
+      setIsLoading(true);
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error("Error getting session:", error);
+        return;
+      }
+
+      if (session?.user) {
+        setUser(session.user);
+        await loadProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error("Auth check error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // تابع برای بارگذاری پروفایل
+  const loadProfile = async (userId: string) => {
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, email, role, full_name")
+        .eq("id", userId)
+        .single();
+
+      if (profileError) {
+        console.error("Profile error:", profileError);
+        return;
+      }
+
+      setProfile(profileData);
+    } catch (err) {
+      console.error("Error loading profile:", err);
+    }
+  };
 
   // Scroll effect
   useEffect(() => {
@@ -93,74 +138,24 @@ export default function Navbar() {
     }
   }, [pathname]);
 
-  // دریافت کاربر و پروفایل
-  // در بخش دریافت کاربر و پروفایل
+  // گوش دادن به تغییرات وضعیت احراز هویت
   useEffect(() => {
-    async function loadUserAndProfile() {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        console.error("Session error:", sessionError);
-        return;
-      }
-
-      const currentUser = sessionData.session?.user;
-      setUser(currentUser || null);
-
-      if (currentUser) {
-        try {
-          // دریافت پروفایل کاربر
-          const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("id, email, role, full_name")
-            .eq("id", currentUser.id)
-            .single();
-
-          if (profileError) {
-            console.error("Profile error:", profileError);
-            return;
-          }
-
-          setProfile(profileData);
-        } catch (err) {
-          console.error("Error loading profile:", err);
-        }
-      } else {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session?.user?.email);
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user);
+        await loadProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
         setProfile(null);
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        setUser(session.user);
+        await loadProfile(session.user.id);
       }
-    }
-
-    loadUserAndProfile();
-
-    // گوش دادن به تغییرات وضعیت احراز هویت
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        const currentUser = session?.user;
-        setUser(currentUser || null);
-
-        if (currentUser) {
-          try {
-            // دریافت پروفایل کاربر
-            const { data: profileData, error: profileError } = await supabase
-              .from("profiles")
-              .select("id, email, role, full_name")
-              .eq("id", currentUser.id)
-              .single();
-
-            if (profileError) {
-              console.error("Profile error:", profileError);
-              return;
-            }
-
-            setProfile(profileData);
-          } catch (err) {
-            console.error("Error loading profile:", err);
-          }
-        } else {
-          setProfile(null);
-        }
-      }
-    );
+    });
 
     return () => subscription.unsubscribe();
   }, []);
@@ -193,9 +188,14 @@ export default function Navbar() {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
-    router.push("/");
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+      router.push("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const handleCartToggle = () => setCartOpen(prev => !prev);
@@ -204,18 +204,35 @@ export default function Navbar() {
     dispatch({ type: "REMOVE_ITEM", payload: { id, branchId } });
   };
 
-  // بررسی آیا کاربر Super Admin است
   const isSuperAdmin = profile?.role === 'super_admin';
+
+  // نمایش loading تا زمانی که وضعیت احراز هویت مشخص شود
+  if (isLoading) {
+    return (
+      <nav className="fixed w-full z-50 bg-black shadow-md">
+        <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-gray-700 rounded-full animate-pulse"></div>
+            <div className="ml-4 w-32 h-6 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+          <div className="flex space-x-4">
+            <div className="w-10 h-10 bg-gray-700 rounded-full animate-pulse"></div>
+            <div className="w-10 h-10 bg-gray-700 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className={`fixed w-full z-50 transition-colors duration-300 ${scrolled ? "bg-black shadow-md" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
 
         {/* Logo */}
-        <Link href="/">
+        <Link href="/" className="cursor-pointer">
           <div className="flex justify-between items-center">
-            <Image src="/images/logo/menu-item-1.png" alt="Logo" width={40} height={40} />
-            <div className="text-xl font-bold text-white ml-4">Ariana Feast</div>
+            <Image src="/images/logo/menu-item-1.png" alt="Logo" width={40} height={40} className="cursor-pointer" />
+            <div className="text-xl font-bold text-white ml-4 cursor-pointer">Ariana Feast</div>
           </div>
         </Link>
 
@@ -226,7 +243,7 @@ export default function Navbar() {
           <div className="relative">
             <button
               onClick={() => setCityOpen(prev => !prev)}
-              className="flex items-center gap-1 px-3 py-2 font-semibold text-white hover:text-emerald-300"
+              className="flex items-center gap-1 px-3 py-2 font-semibold text-white hover:text-emerald-300 cursor-pointer"
             >
               Select Branch <ChevronDown size={16} />
             </button>
@@ -236,7 +253,7 @@ export default function Navbar() {
                   <button
                     key={city.id}
                     onClick={() => handleCitySelect(city.id)}
-                    className="block w-full px-4 py-2 text-left hover:bg-gray-100"
+                    className="block w-full px-4 py-2 text-left hover:bg-gray-100 cursor-pointer"
                   >
                     {city.name}
                   </button>
@@ -249,7 +266,7 @@ export default function Navbar() {
           <div className="relative">
             <button
               onClick={() => setMenuOpen(prev => !prev)}
-              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300"
+              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 cursor-pointer"
             >
               Menu <ChevronDown size={16} />
             </button>
@@ -263,7 +280,7 @@ export default function Navbar() {
                     <button
                       key={branch.id}
                       onClick={() => handleBranchClick(branch.id)}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 cursor-pointer"
                     >
                       {branch.name}{branch.location ? ` (${branch.location})` : ""}
                     </button>
@@ -273,12 +290,24 @@ export default function Navbar() {
             )}
           </div>
 
+          {/* User Info */}
+          <div>
+            {user && (
+              <Link
+                href="/profile"
+                className="px-3 py-2 font-semibold text-white hover:text-emerald-300 cursor-pointer"
+              >
+                My Profile
+              </Link>
+            )}
+          </div>
+
           {/* Regular Menu Items */}
           {baseNavItems.map(item => (
             <Link
               key={item.name}
               href={item.href}
-              className={`px-3 py-2 font-semibold hover:text-emerald-300 text-white ${pathname === item.href ? "text-emerald-300" : ""}`}
+              className={`px-3 py-2 font-semibold hover:text-emerald-300 text-white cursor-pointer ${pathname === item.href ? "text-emerald-300" : ""}`}
               onClick={() => {
                 setMenuOpen(false);
                 setCityOpen(false);
@@ -294,7 +323,7 @@ export default function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setBranchesDropdownOpen(prev => !prev)}
-                className="flex items-center gap-1 px-3 py-2 font-semibold text-white hover:text-emerald-300"
+                className="flex items-center gap-1 px-3 py-2 font-semibold text-white hover:text-emerald-300 cursor-pointer"
               >
                 <Building size={16} />
                 Branches
@@ -304,8 +333,8 @@ export default function Navbar() {
               {branchesDropdownOpen && (
                 <div className="absolute top-full mt-2 w-56 bg-white text-black shadow-lg rounded-md z-50">
                   <Link
-                    href="/dashboard/add_branch"  // تغییر به add_branch
-                    className="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200"
+                    href="/dashboard/add_branch"
+                    className="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200 cursor-pointer"
                     onClick={() => setBranchesDropdownOpen(false)}
                   >
                     <div className="font-medium">Add New Branch</div>
@@ -313,8 +342,8 @@ export default function Navbar() {
                   </Link>
 
                   <Link
-                    href="/dashboard/manage_branches"  // تغییر به manage_branches
-                    className="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200"
+                    href="/dashboard/manage_branches"
+                    className="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200 cursor-pointer"
                     onClick={() => setBranchesDropdownOpen(false)}
                   >
                     <div className="font-medium">Manage Branches</div>
@@ -323,7 +352,7 @@ export default function Navbar() {
 
                   <Link
                     href="/dashboard/set_branch_admin"
-                    className="block px-4 py-3 hover:bg-gray-100"
+                    className="block px-4 py-3 hover:bg-gray-100 cursor-pointer"
                     onClick={() => setBranchesDropdownOpen(false)}
                   >
                     <div className="font-medium">Set Branch Admin</div>
@@ -338,14 +367,14 @@ export default function Navbar() {
           {user ? (
             <button
               onClick={logout}
-              className="px-3 py-2 font-semibold text-white hover:text-emerald-300 flex items-center gap-1"
+              className="px-3 py-2 font-semibold text-white cursor-pointer hover:text-emerald-300 flex items-center gap-1"
             >
               <LogOut size={16} /> Logout
             </button>
           ) : (
             <Link
               href="/login"
-              className="px-3 py-2 font-semibold text-white hover:text-emerald-300 flex items-center gap-1"
+              className="px-3 py-2 font-semibold cursor-pointer text-white hover:text-emerald-300 flex items-center gap-1"
             >
               <LogIn size={16} /> Login
             </Link>
@@ -355,7 +384,7 @@ export default function Navbar() {
           <div className="relative">
             <button
               onClick={handleCartToggle}
-              className="relative flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-white backdrop-blur hover:bg-white/20"
+              className="relative flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-white backdrop-blur hover:bg-white/20 cursor-pointer"
             >
               <Box size={20} />
               <span className="hidden text-sm font-semibold lg:inline">Cart</span>
@@ -377,16 +406,16 @@ export default function Navbar() {
                       {cartItems.map(item => (
                         <li key={`${item.id}-${item.branchId}`} className="flex items-center gap-3 rounded-xl bg-gray-100 p-3">
                           {item.imageUrl ? (
-                            <Image src={item.imageUrl} alt={item.name} width={56} height={56} className="h-14 w-14 rounded-lg object-cover" />
+                            <Image src={item.imageUrl} alt={item.name} width={56} height={56} className="h-14 w-14 rounded-lg object-cover cursor-pointer" />
                           ) : (
-                            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-white text-sm text-gray-500">No image</div>
+                            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-white text-sm text-gray-500 cursor-pointer">No image</div>
                           )}
                           <div className="flex flex-1 flex-col text-sm">
                             <span className="font-semibold">{item.name}</span>
                             <span className="text-gray-500">Qty: {item.quantity} · ${item.price.toFixed(2)}</span>
                           </div>
                           <button
-                            className="text-xs font-semibold text-red-500"
+                            className="text-xs font-semibold text-red-500 cursor-pointer"
                             onClick={() => removeFromCart(item.id, item.branchId)}
                           >
                             Remove
@@ -406,7 +435,7 @@ export default function Navbar() {
                       <Link
                         href="/cart"
                         onClick={() => setCartOpen(false)}
-                        className="mt-3 inline-flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"
+                        className="mt-3 inline-flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 cursor-pointer"
                       >
                         Review order
                       </Link>
@@ -416,17 +445,15 @@ export default function Navbar() {
               </div>
             )}
           </div>
-
         </div>
 
-        {/* Mobile Header - شامل دکمه کارت و منو */}
+        {/* Mobile Header */}
         <div className="lg:hidden flex items-center space-x-4">
-
           {/* Cart Button - Mobile */}
           <div className="relative">
             <button
               onClick={handleCartToggle}
-              className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20"
+              className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white backdrop-blur hover:bg-white/20 cursor-pointer"
             >
               <ShoppingCart size={20} />
               {isClient && totalItems > 0 && (
@@ -435,77 +462,12 @@ export default function Navbar() {
                 </span>
               )}
             </button>
-
-            {/* Mobile Cart Dropdown */}
-            {cartOpen && (
-              <div className="fixed inset-0 z-[100] bg-black bg-opacity-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-hidden">
-                  <div className="flex justify-between items-center p-4 border-b">
-                    <h3 className="text-lg font-bold text-gray-900">Your Cart</h3>
-                    <button
-                      onClick={() => setCartOpen(false)}
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  <div className="p-4 overflow-y-auto max-h-[60vh]">
-                    {cartItems.length === 0 ? (
-                      <p className="text-center text-gray-500 py-8">Your cart is empty</p>
-                    ) : (
-                      <>
-                        <ul className="space-y-3">
-                          {cartItems.map(item => (
-                            <li key={`${item.id}-${item.branchId}`} className="flex items-center gap-3 rounded-xl bg-gray-100 p-3">
-                              {item.imageUrl ? (
-                                <Image src={item.imageUrl} alt={item.name} width={48} height={48} className="h-12 w-12 rounded-lg object-cover" />
-                              ) : (
-                                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white text-xs text-gray-500">No image</div>
-                              )}
-                              <div className="flex flex-1 flex-col text-sm">
-                                <span className="font-semibold">{item.name}</span>
-                                <span className="text-gray-500">Qty: {item.quantity} · ${item.price.toFixed(2)}</span>
-                              </div>
-                              <button
-                                className="text-xs font-semibold text-red-500"
-                                onClick={() => removeFromCart(item.id, item.branchId)}
-                              >
-                                Remove
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-
-                        <div className="mt-4 border-t pt-3 text-sm">
-                          <div className="flex justify-between font-semibold mb-2">
-                            <span>Total items</span>
-                            <span>{totalItems}</span>
-                          </div>
-                          <div className="flex justify-between font-semibold text-gray-800 mb-4">
-                            <span>Subtotal</span>
-                            <span>${totalPrice.toFixed(2)}</span>
-                          </div>
-                          <Link
-                            href="/cart"
-                            onClick={() => setCartOpen(false)}
-                            className="w-full inline-flex justify-center rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700"
-                          >
-                            Review Order
-                          </Link>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Mobile Menu Toggle */}
           <button
             onClick={() => setMobileOpen(prev => !prev)}
-            className="text-white"
+            className="text-white cursor-pointer"
           >
             {mobileOpen ? <X size={28} /> : <MenuIcon size={28} />}
           </button>
@@ -515,12 +477,11 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="lg:hidden bg-black/95 text-white px-4 py-4 space-y-2">
-
           {/* City Dropdown - Mobile */}
           <div className="space-y-2">
             <button
               onClick={() => setCityOpen(prev => !prev)}
-              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
+              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left cursor-pointer"
             >
               Select Branch <ChevronDown size={16} />
             </button>
@@ -533,7 +494,7 @@ export default function Navbar() {
                       handleCitySelect(city.id);
                       setMobileOpen(false);
                     }}
-                    className="block w-full text-left px-3 py-2 hover:text-emerald-300"
+                    className="block w-full text-left px-3 py-2 hover:text-emerald-300 cursor-pointer"
                   >
                     {city.name}
                   </button>
@@ -546,7 +507,7 @@ export default function Navbar() {
           <div className="space-y-2">
             <button
               onClick={() => setMenuOpen(prev => !prev)}
-              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
+              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left cursor-pointer"
             >
               Menu <ChevronDown size={16} />
             </button>
@@ -562,7 +523,7 @@ export default function Navbar() {
                         handleBranchClick(branch.id);
                         setMobileOpen(false);
                       }}
-                      className="block w-full text-left px-3 py-2 hover:text-emerald-300"
+                      className="block w-full text-left px-3 py-2 hover:text-emerald-300 cursor-pointer"
                     >
                       {branch.name}{branch.location ? ` (${branch.location})` : ""}
                     </button>
@@ -577,20 +538,30 @@ export default function Navbar() {
             <Link
               key={item.name}
               href={item.href}
-              className="block px-3 py-2 font-semibold hover:text-emerald-300"
+              className="block px-3 py-2 font-semibold hover:text-emerald-300 cursor-pointer"
               onClick={() => setMobileOpen(false)}
             >
               {item.name}
             </Link>
           ))}
 
-          {/* Branches Management - Mobile (فقط برای Super Admin) */}
+          {/* User Profile - Mobile */}
+          {user && (
+            <Link
+              href="/profile"
+              className="block px-3 py-2 font-semibold hover:text-emerald-300 cursor-pointer"
+              onClick={() => setMobileOpen(false)}
+            >
+              My Profile
+            </Link>
+          )}
 
+          {/* Branches Management - Mobile */}
           {isSuperAdmin && (
             <div className="space-y-2">
               <button
                 onClick={() => setMobileBranchesOpen(prev => !prev)}
-                className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left"
+                className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left cursor-pointer"
               >
                 <Building size={16} />
                 Branches Management
@@ -599,22 +570,22 @@ export default function Navbar() {
               {mobileBranchesOpen && (
                 <div className="ml-4 space-y-1">
                   <Link
-                    href="/dashboard/add_branch"  // تغییر از add-branch به add_branch
-                    className="block px-3 py-2 hover:text-emerald-300"
+                    href="/dashboard/add_branch"
+                    className="block px-3 py-2 hover:text-emerald-300 cursor-pointer"
                     onClick={() => setMobileOpen(false)}
                   >
                     Add New Branch
                   </Link>
                   <Link
-                    href="/dashboard/manage_branches"  // تغییر از manage-branches به manage_branches
-                    className="block px-3 py-2 hover:text-emerald-300"
+                    href="/dashboard/manage_branches"
+                    className="block px-3 py-2 hover:text-emerald-300 cursor-pointer"
                     onClick={() => setMobileOpen(false)}
                   >
                     Manage Branches
                   </Link>
                   <Link
                     href="/dashboard/set_branch_admin"
-                    className="block px-3 py-2 hover:text-emerald-300"
+                    className="block px-3 py-2 hover:text-emerald-300 cursor-pointer"
                     onClick={() => setMobileOpen(false)}
                   >
                     Set Branch Admin
@@ -623,6 +594,7 @@ export default function Navbar() {
               )}
             </div>
           )}
+
           {/* Login / Logout Mobile */}
           {user ? (
             <button
@@ -630,14 +602,14 @@ export default function Navbar() {
                 logout();
                 setMobileOpen(false);
               }}
-              className="w-full px-3 py-2 font-semibold hover:text-emerald-300 flex items-center gap-2"
+              className="w-full px-3 py-2 font-semibold hover:text-emerald-300 flex items-center gap-2 cursor-pointer"
             >
               <LogOut size={18} /> Logout
             </button>
           ) : (
             <Link
               href="/login"
-              className="block px-3 py-2 font-semibold hover:text-emerald-300 flex items-center gap-2"
+              className="block px-3 py-2 font-semibold hover:text-emerald-300 flex items-center gap-2 cursor-pointer"
               onClick={() => setMobileOpen(false)}
             >
               <LogIn size={18} /> Login
