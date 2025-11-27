@@ -47,7 +47,7 @@ const supabase = createClient(
 export default function Navbar() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [cityOpen, setCityOpen] = useState(false);
+
   const [branchesDropdownOpen, setBranchesDropdownOpen] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -57,7 +57,7 @@ export default function Navbar() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // اضافه کردن state برای loading
+
 
   const router = useRouter();
   const pathname = usePathname();
@@ -85,9 +85,9 @@ export default function Navbar() {
   // تابع برای بررسی وضعیت احراز هویت
   const checkAuth = async () => {
     try {
-      setIsLoading(true);
+
       const { data: { session }, error } = await supabase.auth.getSession();
-      
+
       if (error) {
         console.error("Error getting session:", error);
         return;
@@ -103,7 +103,7 @@ export default function Navbar() {
     } catch (error) {
       console.error("Auth check error:", error);
     } finally {
-      setIsLoading(false);
+
     }
   };
 
@@ -144,7 +144,7 @@ export default function Navbar() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state changed:", event, session?.user?.email);
-      
+
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user);
         await loadProfile(session.user.id);
@@ -182,10 +182,7 @@ export default function Navbar() {
     router.push(`/${branchId}/menu`);
   };
 
-  const handleCitySelect = (cityId: number) => {
-    setCityOpen(false);
-    router.push(`/${cityId}`);
-  };
+
 
   const logout = async () => {
     try {
@@ -206,23 +203,7 @@ export default function Navbar() {
 
   const isSuperAdmin = profile?.role === 'super_admin';
 
-  // نمایش loading تا زمانی که وضعیت احراز هویت مشخص شود
-  if (isLoading) {
-    return (
-      <nav className="fixed w-full z-50 bg-black shadow-md">
-        <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-gray-700 rounded-full animate-pulse"></div>
-            <div className="ml-4 w-32 h-6 bg-gray-700 rounded animate-pulse"></div>
-          </div>
-          <div className="flex space-x-4">
-            <div className="w-10 h-10 bg-gray-700 rounded-full animate-pulse"></div>
-            <div className="w-10 h-10 bg-gray-700 rounded-full animate-pulse"></div>
-          </div>
-        </div>
-      </nav>
-    );
-  }
+
 
   return (
     <nav className={`fixed w-full z-50 transition-colors duration-300 ${scrolled ? "bg-black shadow-md" : "bg-transparent"}`}>
@@ -239,28 +220,7 @@ export default function Navbar() {
         {/* Desktop Menu */}
         <div className="hidden lg:flex items-center space-x-6 relative">
 
-          {/* City Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setCityOpen(prev => !prev)}
-              className="flex items-center gap-1 px-3 py-2 font-semibold text-white hover:text-emerald-300 cursor-pointer"
-            >
-              Select Branch <ChevronDown size={16} />
-            </button>
-            {cityOpen && (
-              <div className="absolute mt-2 w-40 rounded-md bg-white text-black shadow-lg z-50">
-                {cities.map(city => (
-                  <button
-                    key={city.id}
-                    onClick={() => handleCitySelect(city.id)}
-                    className="block w-full px-4 py-2 text-left hover:bg-gray-100 cursor-pointer"
-                  >
-                    {city.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+
 
           {/* Menu Dropdown */}
           <div className="relative">
@@ -310,7 +270,7 @@ export default function Navbar() {
               className={`px-3 py-2 font-semibold hover:text-emerald-300 text-white cursor-pointer ${pathname === item.href ? "text-emerald-300" : ""}`}
               onClick={() => {
                 setMenuOpen(false);
-                setCityOpen(false);
+
                 setBranchesDropdownOpen(false);
               }}
             >
@@ -477,31 +437,7 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="lg:hidden bg-black/95 text-white px-4 py-4 space-y-2">
-          {/* City Dropdown - Mobile */}
-          <div className="space-y-2">
-            <button
-              onClick={() => setCityOpen(prev => !prev)}
-              className="flex items-center gap-1 font-semibold px-3 py-2 text-white hover:text-emerald-300 w-full text-left cursor-pointer"
-            >
-              Select Branch <ChevronDown size={16} />
-            </button>
-            {cityOpen && (
-              <div className="ml-4 space-y-1">
-                {cities.map(city => (
-                  <button
-                    key={city.id}
-                    onClick={() => {
-                      handleCitySelect(city.id);
-                      setMobileOpen(false);
-                    }}
-                    className="block w-full text-left px-3 py-2 hover:text-emerald-300 cursor-pointer"
-                  >
-                    {city.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+
 
           {/* Menu Dropdown - Mobile */}
           <div className="space-y-2">
