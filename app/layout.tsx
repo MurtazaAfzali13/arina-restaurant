@@ -4,8 +4,8 @@ import "./globals.css";
 import Navbar from "@/components/navbar/Header";
 import Footer from "@/components/navbar/Footer";
 import { CartProvider } from "@/Contexts/CartContext";
+import { AuthProvider } from "@/Contexts/AuthContext"; // ← اضافه کردن AuthProvider
 import { UserProvider } from "@/modules/food/hooks/useAdmin";
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,17 +28,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <CartProvider>
-          <UserProvider>
-          <Navbar />
-          {children}
-          <Footer />
-          </UserProvider>
-        </CartProvider>
-
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <AuthProvider> {/* ← اضافه کردن AuthProvider */}
+          <CartProvider>
+            <UserProvider> {/* اگر هنوز نیاز است */}
+              <Navbar />
+              {children}
+              <Footer />
+            </UserProvider>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );

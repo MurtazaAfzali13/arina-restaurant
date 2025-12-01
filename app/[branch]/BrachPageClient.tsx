@@ -16,10 +16,7 @@ export interface Branch {
 
 
 
-const MapView = dynamic<{ cities: City[]; selectedCity: City | null }>(
-  () => import('@/modules/map/MapView'),
-  { ssr: false }
-);
+
 
 export default function BranchPageClient({ branchSlug }: { branchSlug: string }) {
   const [branch, setBranch] = useState<Branch | null>(null);
@@ -59,7 +56,7 @@ const city: City = {
 
       <div className="flex flex-col md:flex-row gap-6 mb-12">
         <div className="md:w-1/2 h-[400px] md:h-auto rounded-3xl overflow-hidden shadow-lg border border-gray-200 relative z-10">
-          <MapView cities={[city]} selectedCity={city} />
+       
         </div>
 
         <div className="md:w-1/2 flex flex-col gap-4">

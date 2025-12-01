@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -8,6 +9,7 @@ import { useCart } from '@/Contexts/CartContext';
 
 function CartDishCard({ item }: { item: CartItem }) {
   const { dispatch } = useCart();
+  
 
   const removeFromCart = () => {
     const confirmed = window.confirm(
@@ -83,7 +85,7 @@ function CartDishCard({ item }: { item: CartItem }) {
 
 export default function CartPage() {
   const { state, totalPrice } = useCart();
-
+  const router=useRouter();
   if (state.items.length === 0) {
     return (
       <div className="mt-28 text-center">
@@ -115,10 +117,11 @@ export default function CartPage() {
           >
             Add more meals
           </Link>
+         // در قسمت دکمه‌ها جایگزین کنید:
           <button
             type="button"
             className="rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-emerald-700"
-            onClick={() => alert("Checkout flow is coming soon!")}
+            onClick={() => router.push('/cart/checkout')} // تغییر این خط
           >
             Proceed to Checkout
           </button>
