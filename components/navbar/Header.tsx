@@ -1,5 +1,5 @@
 'use client';
-
+// Then last update
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -65,6 +65,9 @@ export default function Navbar() {
   const [cartOpen, setCartOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  // اضافه کردن state جدید برای مدیریت dropdown موبایل منو
+  const [mobileMenuDropdownOpen, setMobileMenuDropdownOpen] = useState(false);
 
   const cartRef = useRef<HTMLDivElement>(null);
   const cartButtonRef = useRef<HTMLButtonElement>(null);
@@ -79,43 +82,40 @@ export default function Navbar() {
   const totalPrice = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
   const navItems = [
-    { 
-      name: "About", 
-      href: "/about", 
+    {
+      name: "About",
+      href: "/about",
       icon: <Users size={18} className="mr-2" />
     },
-    { 
-      name: "Gallery", 
-      href: "/gallery", 
+    {
+      name: "Gallery",
+      href: "/gallery",
       icon: <Camera size={18} className="mr-2" />
     },
   ];
 
   useEffect(() => {
     setIsClient(true);
-    checkAuth();
+    
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) loadProfile(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
-
-  const checkAuth = async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error("Error getting session:", error);
-        return;
-      }
-
-      if (session?.user) {
-        setUser(session.user);
-        await loadProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
-      }
-    } catch (error) {
-      console.error("Auth check error:", error);
-    }
-  };
 
   const loadProfile = async (userId: string) => {
     try {
@@ -186,25 +186,27 @@ export default function Navbar() {
   // هندل کلیک خارج برای بستن dropdownها
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // بستن dropdown منو
+      // بستن dropdown منو دسکتاپ
       if (menuOpen && !(event.target as Element).closest('.menu-dropdown-container')) {
         setMenuOpen(false);
       }
-      
-      // بستن dropdown شعب
+
+      // بستن dropdown شعب دسکتاپ
       if (branchesDropdownOpen && !(event.target as Element).closest('.branches-dropdown-container')) {
         setBranchesDropdownOpen(false);
       }
-      
+
       // بستن سبد خرید اگر کلیک خارج از آن باشد
-      if (cartOpen && cartRef.current && !cartRef.current.contains(event.target as Node) && 
-          cartButtonRef.current && !cartButtonRef.current.contains(event.target as Node)) {
+      if (cartOpen && cartRef.current && !cartRef.current.contains(event.target as Node) &&
+        cartButtonRef.current && !cartButtonRef.current.contains(event.target as Node)) {
         setCartOpen(false);
       }
-      
+
       // بستن منوی موبایل اگر کلیک خارج باشد
       if (mobileOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
         setMobileOpen(false);
+        setMobileMenuDropdownOpen(false);
+        setMobileBranchesOpen(false);
       }
     };
 
@@ -213,15 +215,16 @@ export default function Navbar() {
   }, [menuOpen, branchesDropdownOpen, cartOpen, mobileOpen]);
 
   const handleBranchClick = (branchId: number) => {
-    setMenuOpen(false);
-    setMobileOpen(false);
     router.push(`/${branchId}/menu`);
+    setMobileOpen(false);
+    setMenuOpen(false);
+    setMobileMenuDropdownOpen(false);
   };
 
   // تابع logout بهبود یافته
   const logout = async () => {
     if (isLoggingOut) return;
-    
+
     setIsLoggingOut(true);
     try {
       // بستن تمام dropdownها
@@ -229,24 +232,30 @@ export default function Navbar() {
       setBranchesDropdownOpen(false);
       setCartOpen(false);
       setMobileOpen(false);
-      
+      setMobileMenuDropdownOpen(false);
+      setMobileBranchesOpen(false);
+
       // خروج از سیستم
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         console.error("Logout error:", error);
         alert("Logout failed. Please try again.");
         return;
       }
-      
+
       // پاک کردن state
       setUser(null);
       setProfile(null);
       
+      // پاک کردن سبد خرید
+      dispatch({ type: "CLEAR_CART" });
+
       // ریدایرکت به صفحه اصلی
-      router.push("/");
-      router.refresh(); // رفرش صفحه برای به روز رسانی state
-      
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 100);
+
     } catch (error) {
       console.error("Logout error:", error);
       alert("An error occurred during logout.");
@@ -271,7 +280,7 @@ export default function Navbar() {
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? "bg-black/95 backdrop-blur-md shadow-xl" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
-        
+
         {/* Logo */}
         <Link href="/" className="cursor-pointer group" onClick={() => {
           setMenuOpen(false);
@@ -280,11 +289,11 @@ export default function Navbar() {
         }}>
           <div className="flex items-center gap-3">
             <div className="relative w-10 h-10">
-              <Image 
-                src="/images/logo/menu-item-1.png" 
-                alt="Ariana Feast Logo" 
-                width={40} 
-                height={40} 
+              <Image
+                src="/images/logo/menu-item-1.png"
+                alt="Ariana Feast Logo"
+                width={40}
+                height={40}
                 className="rounded-lg transition-transform duration-300 group-hover:scale-110"
               />
             </div>
@@ -357,11 +366,10 @@ export default function Navbar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
-                pathname === item.href 
-                  ? "text-emerald-400 bg-emerald-400/10" 
-                  : "text-white hover:text-emerald-300 hover:bg-white/5"
-              }`}
+              className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === item.href
+                ? "text-emerald-400 bg-emerald-400/10"
+                : "text-white hover:text-emerald-300 hover:bg-white/5"
+                }`}
               onClick={() => {
                 setMenuOpen(false);
                 setBranchesDropdownOpen(false);
@@ -378,11 +386,10 @@ export default function Navbar() {
             <>
               <Link
                 href="/profile"
-                className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
-                  pathname === '/profile'
-                    ? "text-emerald-400 bg-emerald-400/10" 
-                    : "text-white hover:text-emerald-300 hover:bg-white/5"
-                }`}
+                className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/profile'
+                  ? "text-emerald-400 bg-emerald-400/10"
+                  : "text-white hover:text-emerald-300 hover:bg-white/5"
+                  }`}
                 onClick={() => {
                   setMenuOpen(false);
                   setBranchesDropdownOpen(false);
@@ -392,14 +399,13 @@ export default function Navbar() {
                 <User size={18} className="mr-2" />
                 My Profile
               </Link>
-              
+
               <Link
                 href="/orders"
-                className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
-                  pathname === '/orders'
-                    ? "text-emerald-400 bg-emerald-400/10" 
-                    : "text-white hover:text-emerald-300 hover:bg-white/5"
-                }`}
+                className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/orders'
+                  ? "text-emerald-400 bg-emerald-400/10"
+                  : "text-white hover:text-emerald-300 hover:bg-white/5"
+                  }`}
                 onClick={() => {
                   setMenuOpen(false);
                   setBranchesDropdownOpen(false);
@@ -421,11 +427,10 @@ export default function Navbar() {
                   setMenuOpen(false);
                   setCartOpen(false);
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
-                  branchesDropdownOpen
-                    ? "text-emerald-400 bg-emerald-400/10" 
-                    : "text-white hover:text-emerald-300 hover:bg-white/5"
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${branchesDropdownOpen
+                  ? "text-emerald-400 bg-emerald-400/10"
+                  : "text-white hover:text-emerald-300 hover:bg-white/5"
+                  }`}
               >
                 <Building size={18} />
                 Branches
@@ -438,7 +443,7 @@ export default function Navbar() {
                     <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                       Branch Management
                     </div>
-                    
+
                     <Link
                       href="/dashboard/add_branch"
                       className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
@@ -504,11 +509,10 @@ export default function Navbar() {
               <button
                 onClick={logout}
                 disabled={isLoggingOut}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
-                  isLoggingOut 
-                    ? "opacity-70 cursor-not-allowed" 
-                    : "text-white hover:text-red-400 hover:bg-red-500/10"
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${isLoggingOut
+                  ? "opacity-70 cursor-not-allowed"
+                  : "text-white hover:text-red-400 hover:bg-red-500/10"
+                  }`}
               >
                 {isLoggingOut ? (
                   <>
@@ -555,7 +559,7 @@ export default function Navbar() {
             </button>
 
             {cartOpen && (
-              <div 
+              <div
                 ref={cartRef}
                 className="absolute right-0 top-full mt-3 w-96 rounded-2xl bg-gray-900 border border-gray-800 p-6 text-white shadow-2xl z-[60]"
               >
@@ -570,7 +574,7 @@ export default function Navbar() {
                     <X size={20} />
                   </button>
                 </div>
-                
+
                 {cartItems.length === 0 ? (
                   <div className="py-8 text-center">
                     <Box size={48} className="mx-auto text-gray-600 mb-4" />
@@ -581,17 +585,17 @@ export default function Navbar() {
                   <>
                     <div className="max-h-80 overflow-y-auto pr-2 space-y-3">
                       {cartItems.map(item => (
-                        <div 
-                          key={`${item.id}-${item.branchId}`} 
+                        <div
+                          key={`${item.id}-${item.branchId}`}
                           className="flex items-center gap-3 rounded-xl bg-gray-800/50 p-4 hover:bg-gray-800 transition-colors"
                         >
                           <div className="relative h-16 w-16 flex-shrink-0">
                             {item.imageUrl ? (
-                              <Image 
-                                src={item.imageUrl} 
-                                alt={item.name} 
-                                width={64} 
-                                height={64} 
+                              <Image
+                                src={item.imageUrl}
+                                alt={item.name}
+                                width={64}
+                                height={64}
                                 className="rounded-lg object-cover"
                               />
                             ) : (
@@ -624,7 +628,7 @@ export default function Navbar() {
                         </div>
                       ))}
                     </div>
-                    
+
                     <div className="mt-6 pt-4 border-t border-gray-800">
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
@@ -636,7 +640,7 @@ export default function Navbar() {
                           <span className="text-emerald-400 font-semibold">${totalPrice.toFixed(2)}</span>
                         </div>
                       </div>
-                      
+
                       <div className="mt-6 flex gap-3">
                         <Link
                           href="/cart"
@@ -680,7 +684,7 @@ export default function Navbar() {
 
             {/* Mobile Cart Dropdown */}
             {cartOpen && (
-              <div 
+              <div
                 ref={cartRef}
                 className="fixed inset-x-4 top-20 mt-2 rounded-2xl bg-gray-900 border border-gray-800 p-4 text-white shadow-2xl z-[60] max-h-[80vh] overflow-y-auto"
               >
@@ -695,7 +699,7 @@ export default function Navbar() {
                     <X size={20} />
                   </button>
                 </div>
-                
+
                 {cartItems.length === 0 ? (
                   <div className="py-6 text-center">
                     <Box size={40} className="mx-auto text-gray-600 mb-3" />
@@ -705,17 +709,17 @@ export default function Navbar() {
                   <>
                     <div className="space-y-3 max-h-60 overflow-y-auto">
                       {cartItems.map(item => (
-                        <div 
-                          key={`${item.id}-${item.branchId}`} 
+                        <div
+                          key={`${item.id}-${item.branchId}`}
                           className="flex items-center gap-3 rounded-xl bg-gray-800/50 p-3"
                         >
                           <div className="relative h-14 w-14 flex-shrink-0">
                             {item.imageUrl ? (
-                              <Image 
-                                src={item.imageUrl} 
-                                alt={item.name} 
-                                width={56} 
-                                height={56} 
+                              <Image
+                                src={item.imageUrl}
+                                alt={item.name}
+                                width={56}
+                                height={56}
                                 className="rounded-lg object-cover"
                               />
                             ) : (
@@ -744,7 +748,7 @@ export default function Navbar() {
                         </div>
                       ))}
                     </div>
-                    
+
                     <div className="mt-4 pt-4 border-t border-gray-800">
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-sm">
@@ -756,7 +760,7 @@ export default function Navbar() {
                           <span className="text-emerald-400 font-semibold">${totalPrice.toFixed(2)}</span>
                         </div>
                       </div>
-                      
+
                       <div className="mt-4 flex flex-col gap-2">
                         <Link
                           href="/cart"
@@ -798,26 +802,29 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {mobileOpen && (
-        <div 
+        <div
           ref={mobileMenuRef}
           className="lg:hidden bg-gray-900/95 backdrop-blur-lg border-t border-gray-800"
         >
           <div className="px-4 py-3 space-y-1">
-            
-            {/* Menu Dropdown - Mobile */}
+
+            {/* Menu Dropdown - Mobile - قسمت اصلاح شده */}
             <div className="space-y-1">
               <button
-                onClick={() => setMenuOpen(!menuOpen)}
+                onClick={() => setMobileMenuDropdownOpen(!mobileMenuDropdownOpen)}
                 className="flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
               >
                 <div className="flex items-center">
                   <Box size={20} className="mr-3" />
                   <span className="font-medium">Menu</span>
                 </div>
-                <ChevronDown size={18} className={`transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={18}
+                  className={`transition-transform duration-200 ${mobileMenuDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
-              
-              {menuOpen && (
+
+              {mobileMenuDropdownOpen && (
                 <div className="ml-8 space-y-1 border-l border-gray-800 pl-3">
                   {loadingBranches ? (
                     <div className="px-4 py-2">
@@ -826,10 +833,14 @@ export default function Navbar() {
                   ) : branches.length === 0 ? (
                     <p className="px-4 py-2 text-sm text-gray-400">No branches</p>
                   ) : (
-                    branches.map(branch => (
-                      <button
+                    branches.map((branch) => (
+                      <Link
                         key={branch.id}
-                        onClick={() => handleBranchClick(branch.id)}
+                        href={`/${branch.id}/menu`}
+                        onClick={() => {
+                          setMobileOpen(false);
+                          setMobileMenuDropdownOpen(false);
+                        }}
                         className="flex items-center w-full px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                       >
                         <Store size={16} className="mr-3 text-emerald-400" />
@@ -839,7 +850,7 @@ export default function Navbar() {
                             <div className="text-xs text-gray-400">{branch.location}</div>
                           )}
                         </div>
-                      </button>
+                      </Link>
                     ))
                   )}
                 </div>
@@ -876,7 +887,7 @@ export default function Navbar() {
                   <User size={20} className="mr-3" />
                   <span className="font-medium">My Profile</span>
                 </Link>
-                
+
                 <Link
                   href="/orders"
                   className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
@@ -904,31 +915,40 @@ export default function Navbar() {
                   </div>
                   <ChevronDown size={18} className={`transition-transform duration-200 ${mobileBranchesOpen ? 'rotate-180' : ''}`} />
                 </button>
-                
+
                 {mobileBranchesOpen && (
                   <div className="ml-8 space-y-1 border-l border-gray-800 pl-3">
                     <Link
                       href="/dashboard/add_branch"
                       className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                      onClick={() => setMobileOpen(false)}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setMobileBranchesOpen(false);
+                      }}
                     >
                       <Settings size={16} className="mr-3 text-emerald-400" />
                       <span>Add New Branch</span>
                     </Link>
-                    
+
                     <Link
                       href="/dashboard/manage_branches"
                       className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                      onClick={() => setMobileOpen(false)}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setMobileBranchesOpen(false);
+                      }}
                     >
                       <Store size={16} className="mr-3 text-blue-400" />
                       <span>Manage Branches</span>
                     </Link>
-                    
+
                     <Link
                       href="/dashboard/set_branch_admin"
                       className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                      onClick={() => setMobileOpen(false)}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setMobileBranchesOpen(false);
+                      }}
                     >
                       <Users size={16} className="mr-3 text-purple-400" />
                       <span>Set Branch Admin</span>
@@ -944,14 +964,15 @@ export default function Navbar() {
                 <button
                   onClick={() => {
                     setMobileOpen(false);
+                    setMobileMenuDropdownOpen(false);
+                    setMobileBranchesOpen(false);
                     logout();
                   }}
                   disabled={isLoggingOut}
-                  className={`flex items-center w-full px-4 py-3 rounded-lg transition-colors cursor-pointer ${
-                    isLoggingOut 
-                      ? "opacity-70 cursor-not-allowed text-gray-400" 
-                      : "text-red-400 hover:bg-red-500/10"
-                  }`}
+                  className={`flex items-center w-full px-4 py-3 rounded-lg transition-colors cursor-pointer ${isLoggingOut
+                    ? "opacity-70 cursor-not-allowed text-gray-400"
+                    : "text-red-400 hover:bg-red-500/10"
+                    }`}
                 >
                   {isLoggingOut ? (
                     <>
