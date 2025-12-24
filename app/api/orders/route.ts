@@ -1,20 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+// 🔹 async و await برای headers
+const getBearerToken = async () => {
+  const allHeaders = await headers(); // ⚡ حتماً await
+  const authHeader = allHeaders.get('Authorization') || '';
+  return authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+};
+
+const createServiceClient = () =>
+  createClient(supabaseUrl, supabaseServiceKey);
+
+const createRlsClient = (token: string) =>
+  createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+// 🔹 ایجاد سفارش
 export async function POST(request: NextRequest) {
   try {
-    // بررسی اینکه درخواست JSON است
     const contentType = request.headers.get('content-type');
     if (!contentType?.includes('application/json')) {
-      return NextResponse.json(
-        { error: 'Content-Type must be application/json' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Content-Type must be application/json' }, { status: 400 });
     }
 
     const body = await request.json().catch(() => {
@@ -23,37 +35,16 @@ export async function POST(request: NextRequest) {
 
     const { user_id, branch_id, items, customer_info, payment_method, delivery_type } = body;
 
-    // اعتبارسنجی فیلدهای ضروری
-    if (!branch_id) {
-      return NextResponse.json(
-        { error: 'Branch ID is required' },
-        { status: 400 }
-      );
-    }
+    if (!branch_id) return NextResponse.json({ error: 'Branch ID is required' }, { status: 400 });
+    if (!items || !Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'Items array is required and cannot be empty' }, { status: 400 });
+    if (!customer_info?.name || !customer_info?.phone || !customer_info?.email) return NextResponse.json({ error: 'Customer name, phone, and email are required' }, { status: 400 });
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json(
-        { error: 'Items array is required and cannot be empty' },
-        { status: 400 }
-      );
-    }
-
-    if (!customer_info?.name || !customer_info?.phone || !customer_info?.email) {
-      return NextResponse.json(
-        { error: 'Customer name, phone, and email are required' },
-        { status: 400 }
-      );
-    }
-
-    // محاسبه مبالغ
-    const total_amount = items.reduce((sum: number, item: any) => {
-      return sum + (Number(item.meal_price) * Number(item.quantity));
-    }, 0);
-    
+    const total_amount = items.reduce((sum: number, item: any) => sum + (Number(item.meal_price) * Number(item.quantity)), 0);
     const tax_amount = total_amount * 0.09;
     const final_amount = total_amount + tax_amount;
 
-    // ایجاد سفارش
+    const supabase = createServiceClient();
+
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
@@ -74,12 +65,8 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (orderError) {
-      console.error('Supabase order error:', orderError);
-      throw new Error(`Database error: ${orderError.message}`);
-    }
+    if (orderError) throw new Error(orderError.message);
 
-    // ایجاد آیتم‌های سفارش
     const orderItems = items.map((item: any) => ({
       order_id: order.id,
       meal_id: item.meal_id,
@@ -90,65 +77,58 @@ export async function POST(request: NextRequest) {
       special_instructions: item.special_instructions || null
     }));
 
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(orderItems);
+    const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+    if (itemsError) throw new Error(itemsError.message);
 
-    if (itemsError) {
-      console.error('Supabase order_items error:', itemsError);
-      throw new Error(`Database error: ${itemsError.message}`);
-    }
-
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       order_id: order.id,
-      order_number: order.order_number 
+      order_number: order.order_number
     }, { status: 201 });
 
   } catch (error: any) {
     console.error('Order creation error:', error);
-    
-    // پاسخ خطای مناسب
     return NextResponse.json(
-      { 
-        error: error.message || 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
+      { error: error.message || 'Internal server error', details: process.env.NODE_ENV === 'development' ? error.stack : undefined },
       { status: 500 }
     );
   }
 }
 
-// به فایل موجود اضافه کنید:
-
+// 🔹 دریافت سفارش‌ها
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
-    
-    // اگر userId دارید، سفارشات کاربر را بگیرید
-    // اگر ندارید، همه سفارشات را برگردانید (برای ادمین)
-    
-    let query = supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const token = await getBearerToken(); // ⚡ await اضافه شد
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
+    const supabase = createRlsClient(token);
+
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role, branch_id')
+      .eq('id', userData.user.id)
+      .single();
+
+    if (profileError || !profile) return NextResponse.json({ error: 'Profile not found' }, { status: 403 });
+
+    let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+
+    if (profile.role === 'branch_admin') {
+      if (!profile.branch_id) return NextResponse.json({ error: 'Branch not set for admin' }, { status: 403 });
+      query = query.eq('branch_id', profile.branch_id);
+    } else {
+      query = query.eq('user_id', userData.user.id);
     }
 
     const { data: orders, error } = await query;
-
     if (error) throw error;
 
     return NextResponse.json(orders);
-
   } catch (error: any) {
     console.error('Get orders error:', error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

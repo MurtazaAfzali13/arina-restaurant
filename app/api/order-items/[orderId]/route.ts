@@ -1,3 +1,4 @@
+// app/api/order-items/[orderId]/route.ts
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
@@ -7,7 +8,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // 🔹 دریافت توکن Bearer با await
 const getBearerToken = async () => {
-  const allHeaders = await headers(); // ⚡ باید await باشد
+  const allHeaders = await headers(); // ⚡ await اضافه شد
   const authHeader = allHeaders.get('Authorization') || '';
   return authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 };
@@ -44,13 +45,14 @@ export async function GET(
       return NextResponse.json({ error: 'Profile not found' }, { status: 403 });
     }
 
-    const { data: order, error } = await supabase
+    // بررسی مالکیت سفارش
+    const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('*')
+      .select('id, user_id, branch_id')
       .eq('id', orderId)
       .single();
 
-    if (error || !order) {
+    if (orderError || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
@@ -64,7 +66,18 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(order);
+    const { data: orderItems, error } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json({ error: 'Failed to fetch order items' }, { status: 500 });
+    }
+
+    return NextResponse.json(orderItems || []);
   } catch (error: any) {
     console.error('API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,5 +1,6 @@
+// components/navbar/Header.tsx
 'use client';
-// Then last update
+
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,16 +15,16 @@ import {
   ShoppingCart,
   Building,
   Camera,
-  GalleryVertical,
   User,
   Package,
-  Home,
   Store,
   Users,
   Settings
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { useCart } from "@/Contexts/CartContext";
+import { useUser } from "@/modules/food/hooks/useAdmin";
+import { UserProfile } from "@/modules/food/domain/food.types"; // 🔥 import تایپ
 
 interface Branch {
   id: number;
@@ -31,97 +32,63 @@ interface Branch {
   location?: string | null;
 }
 
-interface CartItem {
-  id: number;
-  branchId: number;
-  name: string;
-  quantity: number;
-  price: number;
-  imageUrl?: string;
-}
-
-interface Profile {
-  id: string;
-  email: string;
-  role: string;
-  full_name?: string;
-}
-
+// 🔥 حذف LocalProfile - از UserProfile استفاده می‌کنیم
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export default function Navbar() {
+  // State برای مدیریت شعبه‌ها
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  
+  // State برای dropdownها
   const [menuOpen, setMenuOpen] = useState(false);
   const [branchesDropdownOpen, setBranchesDropdownOpen] = useState(false);
-  const [loadingBranches, setLoadingBranches] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileBranchesOpen, setMobileBranchesOpen] = useState(false);
+  const [mobileMenuDropdownOpen, setMobileMenuDropdownOpen] = useState(false);
+  
+  // State برای کاربر
   const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [localProfile, setLocalProfile] = useState<UserProfile | null>(null); // 🔥 تغییر تایپ
   const [isClient, setIsClient] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  
-  // اضافه کردن state جدید برای مدیریت dropdown موبایل منو
-  const [mobileMenuDropdownOpen, setMobileMenuDropdownOpen] = useState(false);
 
-  const cartRef = useRef<HTMLDivElement>(null);
-  const cartButtonRef = useRef<HTMLButtonElement>(null);
+  // استفاده از hook useUser
+  const { profile: adminProfile, isBranchAdmin, loading: userLoading } = useUser();
+
+  // Refs
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
+  // Hooks
   const router = useRouter();
   const pathname = usePathname();
-
   const { state, dispatch } = useCart();
-  const cartItems: CartItem[] = state.items;
-  const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-  const navItems = [
-    {
-      name: "About",
-      href: "/about",
-      icon: <Users size={18} className="mr-2" />
-    },
-    {
-      name: "Gallery",
-      href: "/gallery",
-      icon: <Camera size={18} className="mr-2" />
-    },
-  ];
+  // تشخیص شعبه فعلی از URL
+  const getCurrentBranchId = () => {
+    const match = pathname.match(/\/(\d+)(\/|$)/);
+    return match ? match[1] : null;
+  };
 
-  useEffect(() => {
-    setIsClient(true);
-    
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) loadProfile(session.user.id);
-    });
+  const currentBranchId = getCurrentBranchId();
+  
+  // تعداد آیتم‌های شعبه فعلی
+  const currentBranchItemCount = currentBranchId 
+    ? state.branchCarts[Number(currentBranchId)]?.items.reduce(
+        (sum, item) => sum + item.quantity, 0
+      ) || 0
+    : 0;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          await loadProfile(session.user.id);
-        } else {
-          setProfile(null);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  // لود پروفایل کاربر از Supabase
   const loadProfile = async (userId: string) => {
     try {
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("id, email, role, full_name")
+        .select("id, email, role, full_name, branch_id, phone")
         .eq("id", userId)
         .single();
 
@@ -130,90 +97,17 @@ export default function Navbar() {
         return;
       }
 
-      setProfile(profileData);
+      setLocalProfile(profileData as UserProfile);
     } catch (err) {
       console.error("Error loading profile:", err);
     }
   };
 
-  useEffect(() => {
-    if (pathname === "/") {
-      const handleScroll = () => setScrolled(window.scrollY > 20);
-      window.addEventListener("scroll", handleScroll);
-      return () => window.removeEventListener("scroll", handleScroll);
-    } else {
-      setScrolled(true);
-    }
-  }, [pathname]);
+  // 🔥 ادغام پروفایل‌ها
+  const profile = adminProfile || localProfile;
+  const isSuperAdmin = profile?.role === 'super_admin';
 
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event, session?.user?.email);
-
-      if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user);
-        await loadProfile(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        setUser(session.user);
-        await loadProfile(session.user.id);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const loadBranches = async () => {
-      setLoadingBranches(true);
-      try {
-        const res = await fetch("/api/branches");
-        const data = await res.json();
-        setBranches(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingBranches(false);
-      }
-    };
-    loadBranches();
-  }, []);
-
-  // هندل کلیک خارج برای بستن dropdownها
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // بستن dropdown منو دسکتاپ
-      if (menuOpen && !(event.target as Element).closest('.menu-dropdown-container')) {
-        setMenuOpen(false);
-      }
-
-      // بستن dropdown شعب دسکتاپ
-      if (branchesDropdownOpen && !(event.target as Element).closest('.branches-dropdown-container')) {
-        setBranchesDropdownOpen(false);
-      }
-
-      // بستن سبد خرید اگر کلیک خارج از آن باشد
-      if (cartOpen && cartRef.current && !cartRef.current.contains(event.target as Node) &&
-        cartButtonRef.current && !cartButtonRef.current.contains(event.target as Node)) {
-        setCartOpen(false);
-      }
-
-      // بستن منوی موبایل اگر کلیک خارج باشد
-      if (mobileOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setMobileOpen(false);
-        setMobileMenuDropdownOpen(false);
-        setMobileBranchesOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen, branchesDropdownOpen, cartOpen, mobileOpen]);
-
+  // هندل کلیک روی شعبه
   const handleBranchClick = (branchId: number) => {
     router.push(`/${branchId}/menu`);
     setMobileOpen(false);
@@ -221,7 +115,7 @@ export default function Navbar() {
     setMobileMenuDropdownOpen(false);
   };
 
-  // تابع logout بهبود یافته
+  // تابع logout
   const logout = async () => {
     if (isLoggingOut) return;
 
@@ -230,7 +124,6 @@ export default function Navbar() {
       // بستن تمام dropdownها
       setMenuOpen(false);
       setBranchesDropdownOpen(false);
-      setCartOpen(false);
       setMobileOpen(false);
       setMobileMenuDropdownOpen(false);
       setMobileBranchesOpen(false);
@@ -246,10 +139,10 @@ export default function Navbar() {
 
       // پاک کردن state
       setUser(null);
-      setProfile(null);
-      
+      setLocalProfile(null);
+
       // پاک کردن سبد خرید
-      dispatch({ type: "CLEAR_CART" });
+      dispatch({ type: "CLEAR_ALL" });
 
       // ریدایرکت به صفحه اصلی
       setTimeout(() => {
@@ -264,29 +157,109 @@ export default function Navbar() {
     }
   };
 
-  const handleCartToggle = () => {
-    setCartOpen(prev => !prev);
-    // بستن دیگر dropdownها
-    setMenuOpen(false);
-    setBranchesDropdownOpen(false);
-  };
+  useEffect(() => {
+    setIsClient(true);
+    
+    // لود session اولیه
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) loadProfile(session.user.id);
+    });
 
-  const removeFromCart = (id: number, branchId: number) => {
-    dispatch({ type: "REMOVE_ITEM", payload: { id, branchId } });
-  };
+    // گوش دادن به تغییرات auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await loadProfile(session.user.id);
+        } else {
+          setLocalProfile(null);
+        }
+      }
+    );
 
-  const isSuperAdmin = profile?.role === 'super_admin';
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    // هندل اسکرول
+    if (pathname === "/") {
+      const handleScroll = () => setScrolled(window.scrollY > 20);
+      window.addEventListener("scroll", handleScroll);
+      return () => window.removeEventListener("scroll", handleScroll);
+    } else {
+      setScrolled(true);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    // لود شعبه‌ها
+    const loadBranches = async () => {
+      setLoadingBranches(true);
+      try {
+        const res = await fetch("/api/branches");
+        const data = await res.json();
+        setBranches(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+    loadBranches();
+  }, []);
+
+  useEffect(() => {
+    // هندل کلیک خارج برای بستن dropdownها
+    const handleClickOutside = (event: MouseEvent) => {
+      // بستن dropdown منو دسکتاپ
+      if (menuOpen && !(event.target as Element).closest('.menu-dropdown-container')) {
+        setMenuOpen(false);
+      }
+
+      // بستن dropdown شعب دسکتاپ
+      if (branchesDropdownOpen && !(event.target as Element).closest('.branches-dropdown-container')) {
+        setBranchesDropdownOpen(false);
+      }
+
+      // بستن منوی موبایل اگر کلیک خارج باشد
+      if (mobileOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setMobileOpen(false);
+        setMobileMenuDropdownOpen(false);
+        setMobileBranchesOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen, branchesDropdownOpen, mobileOpen]);
+
+  const navItems = [
+    {
+      name: "About",
+      href: "/about",
+      icon: <Users size={18} className="mr-2" />
+    },
+    {
+      name: "Gallery",
+      href: "/gallery",
+      icon: <Camera size={18} className="mr-2" />
+    },
+  ];
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? "bg-black/95 backdrop-blur-md shadow-xl" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
 
         {/* Logo */}
-        <Link href="/" className="cursor-pointer group" onClick={() => {
-          setMenuOpen(false);
-          setBranchesDropdownOpen(false);
-          setCartOpen(false);
-        }}>
+        <Link 
+          href="/" 
+          className="cursor-pointer group"
+          onClick={() => {
+            setMenuOpen(false);
+            setBranchesDropdownOpen(false);
+          }}
+        >
           <div className="flex items-center gap-3">
             <div className="relative w-10 h-10">
               <Image
@@ -312,7 +285,6 @@ export default function Navbar() {
               onClick={() => {
                 setMenuOpen(!menuOpen);
                 setBranchesDropdownOpen(false);
-                setCartOpen(false);
               }}
               className="flex items-center gap-2 font-semibold px-4 py-2.5 rounded-lg text-white hover:text-emerald-300 hover:bg-white/5 transition-all duration-200 cursor-pointer"
             >
@@ -373,7 +345,6 @@ export default function Navbar() {
               onClick={() => {
                 setMenuOpen(false);
                 setBranchesDropdownOpen(false);
-                setCartOpen(false);
               }}
             >
               {item.icon}
@@ -393,28 +364,44 @@ export default function Navbar() {
                 onClick={() => {
                   setMenuOpen(false);
                   setBranchesDropdownOpen(false);
-                  setCartOpen(false);
                 }}
               >
                 <User size={18} className="mr-2" />
                 My Profile
               </Link>
 
-              <Link
-                href="/orders"
-                className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/orders'
-                  ? "text-emerald-400 bg-emerald-400/10"
-                  : "text-white hover:text-emerald-300 hover:bg-white/5"
-                  }`}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setBranchesDropdownOpen(false);
-                  setCartOpen(false);
-                }}
-              >
-                <Package size={18} className="mr-2" />
-                My Orders
-              </Link>
+              {/* Orders nav item - role based */}
+              {isBranchAdmin && profile?.branch_id != null ? (
+                <Link
+                  href={`/${profile.branch_id}/orders`}
+                  className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === `/${profile.branch_id}/orders`
+                    ? "text-emerald-400 bg-emerald-400/10"
+                    : "text-white hover:text-emerald-300 hover:bg-white/5"
+                    }`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setBranchesDropdownOpen(false);
+                  }}
+                >
+                  <Package size={18} className="mr-2" />
+                  Manage Orders
+                </Link>
+              ) : (
+                <Link
+                  href="/orders"
+                  className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/orders'
+                    ? "text-emerald-400 bg-emerald-400/10"
+                    : "text-white hover:text-emerald-300 hover:bg-white/5"
+                    }`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setBranchesDropdownOpen(false);
+                  }}
+                >
+                  <Package size={18} className="mr-2" />
+                  My Orders
+                </Link>
+              )}
             </>
           )}
 
@@ -425,7 +412,6 @@ export default function Navbar() {
                 onClick={() => {
                   setBranchesDropdownOpen(!branchesDropdownOpen);
                   setMenuOpen(false);
-                  setCartOpen(false);
                 }}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${branchesDropdownOpen
                   ? "text-emerald-400 bg-emerald-400/10"
@@ -533,7 +519,6 @@ export default function Navbar() {
                 onClick={() => {
                   setMenuOpen(false);
                   setBranchesDropdownOpen(false);
-                  setCartOpen(false);
                 }}
               >
                 <LogIn size={18} />
@@ -543,252 +528,38 @@ export default function Navbar() {
           </div>
 
           {/* Cart Button - Desktop */}
-          <div className="relative">
-            <button
-              ref={cartButtonRef}
-              onClick={handleCartToggle}
-              className="relative flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-emerald-500/25 cursor-pointer"
+          {currentBranchId && (
+            <Link
+              href={`/${currentBranchId}/cart`}
+              className="relative flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-emerald-500/25"
             >
               <ShoppingCart size={20} />
               <span className="text-sm font-semibold">Cart</span>
-              {isClient && totalItems > 0 && (
+              {isClient && currentBranchItemCount > 0 && (
                 <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-lg">
-                  {totalItems}
+                  {currentBranchItemCount}
                 </span>
               )}
-            </button>
-
-            {cartOpen && (
-              <div
-                ref={cartRef}
-                className="absolute right-0 top-full mt-3 w-96 rounded-2xl bg-gray-900 border border-gray-800 p-6 text-white shadow-2xl z-[60]"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
-                    Your Shopping Cart
-                  </h3>
-                  <button
-                    onClick={() => setCartOpen(false)}
-                    className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-gray-800"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                {cartItems.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <Box size={48} className="mx-auto text-gray-600 mb-4" />
-                    <p className="text-gray-400">Your cart is empty</p>
-                    <p className="text-sm text-gray-500 mt-1">Add items from the menu to get started</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="max-h-80 overflow-y-auto pr-2 space-y-3">
-                      {cartItems.map(item => (
-                        <div
-                          key={`${item.id}-${item.branchId}`}
-                          className="flex items-center gap-3 rounded-xl bg-gray-800/50 p-4 hover:bg-gray-800 transition-colors"
-                        >
-                          <div className="relative h-16 w-16 flex-shrink-0">
-                            {item.imageUrl ? (
-                              <Image
-                                src={item.imageUrl}
-                                alt={item.name}
-                                width={64}
-                                height={64}
-                                className="rounded-lg object-cover"
-                              />
-                            ) : (
-                              <div className="h-16 w-16 rounded-lg bg-gray-700 flex items-center justify-center">
-                                <Box size={24} className="text-gray-500" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-white truncate">{item.name}</h4>
-                            <div className="flex items-center justify-between mt-1">
-                              <span className="text-sm text-gray-400">
-                                Qty: {item.quantity}
-                              </span>
-                              <span className="text-emerald-400 font-semibold">
-                                ${(item.price * item.quantity).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              ${item.price.toFixed(2)} each
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(item.id, item.branchId)}
-                            className="ml-2 p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                            title="Remove item"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-6 pt-4 border-t border-gray-800">
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Items</span>
-                          <span className="text-white">{totalItems}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Subtotal</span>
-                          <span className="text-emerald-400 font-semibold">${totalPrice.toFixed(2)}</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 flex gap-3">
-                        <Link
-                          href="/cart"
-                          onClick={() => setCartOpen(false)}
-                          className="flex-1 text-center py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 cursor-pointer"
-                        >
-                          View Cart
-                        </Link>
-                        <Link
-                          href="/checkout"
-                          onClick={() => setCartOpen(false)}
-                          className="flex-1 text-center py-3 rounded-xl bg-gray-800 text-white font-semibold hover:bg-gray-700 transition-colors cursor-pointer"
-                        >
-                          Checkout
-                        </Link>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+            </Link>
+          )}
         </div>
 
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center gap-3">
           {/* Cart Button - Mobile */}
-          <div className="relative">
-            <button
-              ref={cartButtonRef}
-              onClick={handleCartToggle}
-              className="relative p-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg cursor-pointer"
+          {currentBranchId && (
+            <Link
+              href={`/${currentBranchId}/cart`}
+              className="relative p-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg"
             >
               <ShoppingCart size={22} />
-              {isClient && totalItems > 0 && (
+              {isClient && currentBranchItemCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow">
-                  {totalItems}
+                  {currentBranchItemCount}
                 </span>
               )}
-            </button>
-
-            {/* Mobile Cart Dropdown */}
-            {cartOpen && (
-              <div
-                ref={cartRef}
-                className="fixed inset-x-4 top-20 mt-2 rounded-2xl bg-gray-900 border border-gray-800 p-4 text-white shadow-2xl z-[60] max-h-[80vh] overflow-y-auto"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
-                    Your Cart
-                  </h3>
-                  <button
-                    onClick={() => setCartOpen(false)}
-                    className="p-1 text-gray-400 hover:text-white"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                {cartItems.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <Box size={40} className="mx-auto text-gray-600 mb-3" />
-                    <p className="text-gray-400">Your cart is empty</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
-                      {cartItems.map(item => (
-                        <div
-                          key={`${item.id}-${item.branchId}`}
-                          className="flex items-center gap-3 rounded-xl bg-gray-800/50 p-3"
-                        >
-                          <div className="relative h-14 w-14 flex-shrink-0">
-                            {item.imageUrl ? (
-                              <Image
-                                src={item.imageUrl}
-                                alt={item.name}
-                                width={56}
-                                height={56}
-                                className="rounded-lg object-cover"
-                              />
-                            ) : (
-                              <div className="h-14 w-14 rounded-lg bg-gray-700 flex items-center justify-center">
-                                <Box size={20} className="text-gray-500" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-white text-sm truncate">{item.name}</h4>
-                            <div className="flex items-center justify-between mt-1">
-                              <span className="text-xs text-gray-400">
-                                Qty: {item.quantity}
-                              </span>
-                              <span className="text-emerald-400 font-semibold text-sm">
-                                ${(item.price * item.quantity).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(item.id, item.branchId)}
-                            className="p-1.5 text-gray-400 hover:text-red-400"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-800">
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Items</span>
-                          <span className="text-white">{totalItems}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Total</span>
-                          <span className="text-emerald-400 font-semibold">${totalPrice.toFixed(2)}</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-2">
-                        <Link
-                          href="/cart"
-                          onClick={() => {
-                            setCartOpen(false);
-                            setMobileOpen(false);
-                          }}
-                          className="w-full text-center py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold cursor-pointer"
-                        >
-                          Go to Cart
-                        </Link>
-                        <Link
-                          href="/checkout"
-                          onClick={() => {
-                            setCartOpen(false);
-                            setMobileOpen(false);
-                          }}
-                          className="w-full text-center py-3 rounded-xl bg-gray-800 text-white font-semibold cursor-pointer"
-                        >
-                          Checkout
-                        </Link>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+            </Link>
+          )}
 
           {/* Mobile Menu Toggle */}
           <button
@@ -808,7 +579,7 @@ export default function Navbar() {
         >
           <div className="px-4 py-3 space-y-1">
 
-            {/* Menu Dropdown - Mobile - قسمت اصلاح شده */}
+            {/* Menu Dropdown - Mobile */}
             <div className="space-y-1">
               <button
                 onClick={() => setMobileMenuDropdownOpen(!mobileMenuDropdownOpen)}
@@ -865,7 +636,6 @@ export default function Navbar() {
                 className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                 onClick={() => {
                   setMobileOpen(false);
-                  setCartOpen(false);
                 }}
               >
                 {item.icon}
@@ -881,24 +651,36 @@ export default function Navbar() {
                   className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                   onClick={() => {
                     setMobileOpen(false);
-                    setCartOpen(false);
                   }}
                 >
                   <User size={20} className="mr-3" />
                   <span className="font-medium">My Profile</span>
                 </Link>
 
-                <Link
-                  href="/orders"
-                  className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    setCartOpen(false);
-                  }}
-                >
-                  <Package size={20} className="mr-3" />
-                  <span className="font-medium">My Orders</span>
-                </Link>
+                {/* Orders nav item - role based (mobile) */}
+                {isBranchAdmin && profile?.branch_id != null ? (
+                  <Link
+                    href={`/${profile.branch_id}/orders`}
+                    className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setMobileOpen(false);
+                    }}
+                  >
+                    <Package size={20} className="mr-3" />
+                    <span className="font-medium">Manage Orders</span>
+                  </Link>
+                ) : (
+                  <Link
+                    href="/orders"
+                    className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setMobileOpen(false);
+                    }}
+                  >
+                    <Package size={20} className="mr-3" />
+                    <span className="font-medium">My Orders</span>
+                  </Link>
+                )}
               </>
             )}
 
@@ -992,7 +774,6 @@ export default function Navbar() {
                   className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-emerald-500/10 transition-colors cursor-pointer"
                   onClick={() => {
                     setMobileOpen(false);
-                    setCartOpen(false);
                   }}
                 >
                   <LogIn size={20} className="mr-3" />

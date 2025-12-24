@@ -1,15 +1,15 @@
+import BranchPageClient from "./BrachPageClient";
 
-'use client';
-
-import { use } from 'react';
-
-
-export default function MenuPage({ params }: { params: Promise<{ branch: string }> }) {
-  const { branch } = use(params);
+export default async function MenuPage({
+  params,
+}: {
+  params: { branch: string };
+}) {
+  const { branch } = params;
 
   return (
     <div className="p-6">
-   
+      <BranchPageClient branchSlug={branch} />
     </div>
   );
 }
