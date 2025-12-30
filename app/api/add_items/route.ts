@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers'; // این تابع async شده است
 import fs from "fs/promises";
 import path from "path";
 import sharp from "sharp";
-import { supabaseServer } from "@/lib/supabaseServer";
 
-// تابع تولید slug از نام غذا
+// Generate slug
 function generateSlug(name: string) {
   return (
     name
@@ -18,93 +19,227 @@ function generateSlug(name: string) {
 }
 
 export async function POST(req: Request) {
+  console.log("=== API ADD_ITEMS START ===");
+  
   try {
-    // گرفتن هدر Authorization (Bearer token)
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 🔧 FIX: await the cookies() function
+    const cookieStore =  cookies();
+    
+    // Create supabase client for route handler
+    const supabase = createRouteHandlerClient({ 
+      cookies: () => cookieStore 
+    });
+    
+    // Check session with route handler
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    console.log("Session from route handler:", {
+      hasSession: !!session,
+      userId: session?.user?.id,
+      email: session?.user?.email,
+      sessionError: sessionError?.message
+    });
+
+    if (!session) {
+      console.error("No session found in API");
+      return NextResponse.json({ 
+        error: "User not authenticated",
+        message: "Please login again"
+      }, { status: 401 });
     }
 
-    const token = authHeader.split(" ")[1];
-
-    // بررسی Session و گرفتن پروفایل
-    const { data: { user }, error: sessionError } = await supabaseServer.auth.getUser(token);
-
-    if (sessionError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: profile, error: profileError } = await supabaseServer
+    // Get user profile
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("role")
-      .eq("id", user.id)
+      .select("role, branch_id")
+      .eq("id", session.user.id)
       .single();
 
+    console.log("Profile data:", {
+      profile,
+      profileError: profileError?.message
+    });
+
     if (profileError || !profile) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      console.error("Profile fetch failed:", profileError);
+      return NextResponse.json({ 
+        error: "Error fetching user profile"
+      }, { status: 500 });
     }
 
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Access denied. Admins only." }, { status: 403 });
+    // Check role
+    const isAdmin = profile.role === "super_admin" || profile.role === "branch_admin";
+    if (!isAdmin) {
+      console.error("User is not admin:", profile.role);
+      return NextResponse.json({ 
+        error: "Access denied. Admins only.",
+        userRole: profile.role
+      }, { status: 403 });
     }
 
-    // ادامه ثبت غذا
+    console.log("✅ User authorized:", {
+      userId: session.user.id,
+      role: profile.role,
+      branchId: profile.branch_id
+    });
+
+    // Get form data
     const formData = await req.formData();
+    
     const name = formData.get("name") as string;
-    const description = formData.get("description") as string;
-    const price = parseFloat(formData.get("price") as string);
+    const price = Number(formData.get("price"));
+    const branch_id = Number(formData.get("branch_id"));
     const category = (formData.get("category") as string) || "Other";
-    const branch_id = formData.get("branch_id") as string;
+    const description = formData.get("description") as string;
     const image = formData.get("image") as File | null;
+    
+    console.log("📝 Form data received:", {
+      name,
+      price,
+      branch_id,
+      category,
+      description: description ? "Has description" : "No description",
+      image: image ? `Yes (${image.size} bytes)` : "No"
+    });
 
-    if (!name || isNaN(price) || !branch_id) {
-      return NextResponse.json({ error: "فیلدهای اجباری پر نشده‌اند." }, { status: 400 });
+    // Validation
+    if (!name || name.trim() === "") {
+      return NextResponse.json({ 
+        error: "Meal name is required" 
+      }, { status: 400 });
     }
 
+    if (isNaN(price) || price <= 0) {
+      return NextResponse.json({ 
+        error: "Enter a valid price" 
+      }, { status: 400 });
+    }
+
+    if (isNaN(branch_id) || branch_id <= 0) {
+      return NextResponse.json({ 
+        error: "Invalid branch ID" 
+      }, { status: 400 });
+    }
+
+    // Check branch_admin access
+    if (profile.role === "branch_admin") {
+      if (profile.branch_id !== branch_id) {
+        console.error("Branch mismatch:", {
+          userBranch: profile.branch_id,
+          requestedBranch: branch_id
+        });
+        return NextResponse.json(
+          { error: "You can only add meals to your own branch" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Process image
     let imagePath = "/images/meals/default.jpg";
 
     if (image && image.size > 0) {
+      console.log("Processing image...");
+      
       if (image.size > 5 * 1024 * 1024) {
-        return NextResponse.json({ error: "حداکثر حجم عکس 5MB است." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Maximum image size is 5MB" },
+          { status: 400 }
+        );
       }
 
-      const buffer = Buffer.from(await image.arrayBuffer());
-      const optimizedBuffer = await sharp(buffer)
-        .resize(1024, 1024, { fit: "inside" })
-        .jpeg({ quality: 85 })
-        .toBuffer();
+      // Check file type
+      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(image.type)) {
+        return NextResponse.json(
+          { error: "Unsupported image format" },
+          { status: 400 }
+        );
+      }
 
-      const fileName = `${name.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.jpg`;
-      const imagesDir = path.join(process.cwd(), "public", "images", "meals");
+      try {
+        const buffer = Buffer.from(await image.arrayBuffer());
 
-      await fs.mkdir(imagesDir, { recursive: true });
-      await fs.writeFile(path.join(imagesDir, fileName), optimizedBuffer);
+        const optimized = await sharp(buffer)
+          .resize(800, 800, { fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
 
-      imagePath = `/images/meals/${fileName}`;
+        const fileName = `${generateSlug(name)}.jpg`;
+        const imagesDir = path.join(process.cwd(), "public", "images", "meals");
+
+        await fs.mkdir(imagesDir, { recursive: true });
+        const filePath = path.join(imagesDir, fileName);
+        await fs.writeFile(filePath, optimized);
+
+        imagePath = `/images/meals/${fileName}`;
+        console.log("✅ Image saved:", imagePath);
+      } catch (imageError: any) {
+        console.error("Image processing error:", imageError);
+        return NextResponse.json(
+          { error: "Error processing image" },
+          { status: 500 }
+        );
+      }
     }
 
+    // Insert into database
     const slug = generateSlug(name);
+    
+    console.log("Inserting into database...", {
+      name,
+      slug,
+      price,
+      branch_id,
+      category,
+      imagePath
+    });
 
-    const { data, error } = await supabaseServer.from("food_items").insert([
-      {
-        name,
-        slug,
-        description,
-        price,
-        category,
-        branch_id: parseInt(branch_id),
-        image_url: imagePath,
-      },
-    ]);
+    const { data, error: insertError } = await supabase
+      .from("food_items")
+      .insert([
+        {
+          name,
+          slug,
+          description: description || null,
+          price,
+          category,
+          branch_id,
+          image_url: imagePath,
+          created_by: session.user.id,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
 
-    if (error) {
-      console.error("Insert error:", error);
-      return NextResponse.json({ error: "خطا در ثبت غذا" }, { status: 500 });
+    if (insertError) {
+      console.error("❌ Database insert error:", insertError);
+      return NextResponse.json(
+        { 
+          error: "Error saving meal to database",
+          details: insertError.message 
+        },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ message: "غذا با موفقیت ثبت شد!", meal: data });
+    console.log("✅ Meal added successfully:", data);
+
+    return NextResponse.json({
+      message: "Meal added successfully!",
+      data,
+      success: true
+    }, { status: 201 });
+
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: "خطای غیرمنتظره", details: err.message }, { status: 500 });
+    console.error("❌ Unhandled API error:", err);
+    return NextResponse.json({
+      error: "Server error",
+      details: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    }, { status: 500 });
+  } finally {
+    console.log("=== API ADD_ITEMS END ===");
   }
 }

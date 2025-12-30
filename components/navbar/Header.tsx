@@ -1,4 +1,3 @@
-// components/navbar/Header.tsx
 'use client';
 
 import { useEffect, useState, useRef } from "react";
@@ -21,22 +20,15 @@ import {
   Users,
   Settings
 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useCart } from "@/Contexts/CartContext";
 import { useUser } from "@/modules/food/hooks/useAdmin";
-import { UserProfile } from "@/modules/food/domain/food.types"; // 🔥 import تایپ
 
 interface Branch {
   id: number;
   name: string;
   location?: string | null;
 }
-
-// 🔥 حذف LocalProfile - از UserProfile استفاده می‌کنیم
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function Navbar() {
   // State برای مدیریت شعبه‌ها
@@ -49,16 +41,18 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileBranchesOpen, setMobileBranchesOpen] = useState(false);
   const [mobileMenuDropdownOpen, setMobileMenuDropdownOpen] = useState(false);
-  
-  // State برای کاربر
   const [scrolled, setScrolled] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [localProfile, setLocalProfile] = useState<UserProfile | null>(null); // 🔥 تغییر تایپ
-  const [isClient, setIsClient] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // استفاده از hook useUser
-  const { profile: adminProfile, isBranchAdmin, loading: userLoading } = useUser();
+  // استفاده از hook useUser - فقط از این hook استفاده کنید
+  const { 
+    user, 
+    profile, 
+    isBranchAdmin, 
+    isSuperAdmin, 
+    loading: userLoading, 
+    refreshProfile 
+  } = useUser();
 
   // Refs
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -67,6 +61,7 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { state, dispatch } = useCart();
+  const supabase = createClientComponentClient();
 
   // تشخیص شعبه فعلی از URL
   const getCurrentBranchId = () => {
@@ -82,30 +77,6 @@ export default function Navbar() {
         (sum, item) => sum + item.quantity, 0
       ) || 0
     : 0;
-
-  // لود پروفایل کاربر از Supabase
-  const loadProfile = async (userId: string) => {
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, email, role, full_name, branch_id, phone")
-        .eq("id", userId)
-        .single();
-
-      if (profileError) {
-        console.error("Profile error:", profileError);
-        return;
-      }
-
-      setLocalProfile(profileData as UserProfile);
-    } catch (err) {
-      console.error("Error loading profile:", err);
-    }
-  };
-
-  // 🔥 ادغام پروفایل‌ها
-  const profile = adminProfile || localProfile;
-  const isSuperAdmin = profile?.role === 'super_admin';
 
   // هندل کلیک روی شعبه
   const handleBranchClick = (branchId: number) => {
@@ -137,10 +108,6 @@ export default function Navbar() {
         return;
       }
 
-      // پاک کردن state
-      setUser(null);
-      setLocalProfile(null);
-
       // پاک کردن سبد خرید
       dispatch({ type: "CLEAR_ALL" });
 
@@ -156,30 +123,6 @@ export default function Navbar() {
       setIsLoggingOut(false);
     }
   };
-
-  useEffect(() => {
-    setIsClient(true);
-    
-    // لود session اولیه
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) loadProfile(session.user.id);
-    });
-
-    // گوش دادن به تغییرات auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await loadProfile(session.user.id);
-        } else {
-          setLocalProfile(null);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   useEffect(() => {
     // هندل اسکرول
@@ -246,6 +189,39 @@ export default function Navbar() {
       icon: <Camera size={18} className="mr-2" />
     },
   ];
+
+  // Loading state
+  if (userLoading) {
+    return (
+      <nav className="fixed w-full z-50 bg-black/95 backdrop-blur-md shadow-xl">
+        <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
+          <Link href="/" className="cursor-pointer group">
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10">
+                <Image
+                  src="/images/logo/menu-item-1.png"
+                  alt="Ariana Feast Logo"
+                  width={40}
+                  height={40}
+                  className="rounded-lg"
+                />
+              </div>
+              <div className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
+                Ariana Feast
+              </div>
+            </div>
+          </Link>
+          <div className="hidden lg:flex items-center gap-4">
+            <div className="h-8 w-20 bg-gray-800 rounded animate-pulse"></div>
+            <div className="h-8 w-20 bg-gray-800 rounded animate-pulse"></div>
+          </div>
+          <div className="lg:hidden">
+            <div className="h-8 w-8 bg-gray-800 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? "bg-black/95 backdrop-blur-md shadow-xl" : "bg-transparent"}`}>
@@ -352,8 +328,8 @@ export default function Navbar() {
             </Link>
           ))}
 
-          {/* User Info */}
-          {user && (
+          {/* User Info - فقط اگر user وجود داشته باشد */}
+          {user && profile && (
             <>
               <Link
                 href="/profile"
@@ -535,7 +511,7 @@ export default function Navbar() {
             >
               <ShoppingCart size={20} />
               <span className="text-sm font-semibold">Cart</span>
-              {isClient && currentBranchItemCount > 0 && (
+              {currentBranchItemCount > 0 && (
                 <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-lg">
                   {currentBranchItemCount}
                 </span>
@@ -553,7 +529,7 @@ export default function Navbar() {
               className="relative p-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg"
             >
               <ShoppingCart size={22} />
-              {isClient && currentBranchItemCount > 0 && (
+              {currentBranchItemCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow">
                   {currentBranchItemCount}
                 </span>
@@ -644,7 +620,7 @@ export default function Navbar() {
             ))}
 
             {/* User Profile Links - Mobile */}
-            {user && (
+            {user && profile && (
               <>
                 <Link
                   href="/profile"

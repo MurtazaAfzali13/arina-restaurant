@@ -77,44 +77,61 @@ export default function GalleryGrid({ photos, perPage = 30 }: GalleryGridProps) 
           ))}
       </div>
 
-      {/* ✅ Pagination Controls */}
-      <div className="flex justify-center">
-        <div className="flex justify-center mb-10">
-          <div className="bg-green-600 rounded-xl p-2 flex items-center w-full sm:w-3/4 md:w-1/2 lg:w-1/4">
-            <Pagination className="w-full">
-              <PaginationContent className="flex justify-between items-center w-full">
-                <PaginationItem>
+      {/* ✅ Responsive Pagination Controls */}
+      <div className="flex justify-center px-4">
+        <div className="w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl mb-10">
+          <div className="bg-green-600 rounded-xl p-2 sm:p-3">
+            <Pagination>
+              <PaginationContent
+                className="
+            flex flex-col gap-2
+            sm:flex-row sm:justify-between sm:items-center
+          "
+              >
+                {/* Previous */}
+                <PaginationItem className="flex justify-center sm:justify-start">
                   <PaginationPrevious
                     onClick={handlePrev}
-                    className={`cursor-pointer ${page === 1 ? "opacity-50 pointer-events-none" : ""
-                      }`}
+                    className={`
+                cursor-pointer text-sm sm:text-base
+                ${page === 1 ? "opacity-50 pointer-events-none" : ""}
+              `}
                   />
                 </PaginationItem>
 
-                <span className="px-2 sm:px-4 py-1 sm:py-2 text-gray-800 text-sm sm:text-md text-center">
+                {/* Page Info */}
+                <span
+                  className="
+              text-center text-xs sm:text-sm md:text-base
+              bg-white rounded-lg px-3 py-1 sm:px-4 sm:py-2
+            "
+                >
                   Page {page} of {totalPages}
                 </span>
 
-                <PaginationItem>
+                {/* Next */}
+                <PaginationItem className="flex justify-center sm:justify-end">
                   <PaginationNext
                     onClick={handleNext}
-                    className={`cursor-pointer ${page === totalPages ? "opacity-50 pointer-events-none" : ""
-                      }`}
+                    className={`
+                cursor-pointer text-sm sm:text-base
+                ${page === totalPages ? "opacity-50 pointer-events-none" : ""}
+              `}
                   />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
           </div>
         </div>
-
       </div>
+
 
       {/* ✅ Modal (Popup) using shadcn Dialog */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
         <DialogContent className="max-w-4xl bg-white/95 backdrop-blur-md border-none shadow-2xl rounded-3xl p-0 overflow-hidden">
           {selected && (
             <>
-            
+
 
               <div className="relative w-full">
                 <img
