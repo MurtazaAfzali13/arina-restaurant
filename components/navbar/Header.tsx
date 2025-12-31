@@ -44,7 +44,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // استفاده از hook useUser - فقط از این hook استفاده کنید
+  // استفاده از hook useUser
   const { 
     user, 
     profile, 
@@ -86,7 +86,7 @@ export default function Navbar() {
     setMobileMenuDropdownOpen(false);
   };
 
-  // تابع logout
+  // تابع logout بهبود یافته
   const logout = async () => {
     if (isLoggingOut) return;
 
@@ -111,9 +111,15 @@ export default function Navbar() {
       // پاک کردن سبد خرید
       dispatch({ type: "CLEAR_ALL" });
 
-      // ریدایرکت به صفحه اصلی
+      // رفرش کردن داده‌های کاربر
+      await refreshProfile();
+      
+      // رفرش کردن cache صفحه
+      router.refresh();
+
+      // ریدایرکت به صفحه اصلی با تاخیر مختصر
       setTimeout(() => {
-        window.location.href = "/";
+        router.push("/");
       }, 100);
 
     } catch (error) {
