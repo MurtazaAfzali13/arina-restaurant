@@ -198,44 +198,32 @@ export default function Navbar() {
     },
   ];
 
-  // Loading state
-  if (userLoading) {
-    return (
-      <nav className="fixed w-full z-50 bg-black/95 backdrop-blur-md shadow-xl">
-        <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
-          <Link href="/" className="cursor-pointer group">
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10">
-                <Image
-                  src="/images/logo/menu-item-1.png"
-                  alt="Ariana Feast Logo"
-                  width={40}
-                  height={40}
-                  className="rounded-lg"
-                />
-              </div>
-              <div className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
-                Ariana Feast
-              </div>
-            </div>
-          </Link>
-          <div className="hidden lg:flex items-center gap-4">
-            <div className="h-8 w-20 bg-gray-800 rounded animate-pulse"></div>
-            <div className="h-8 w-20 bg-gray-800 rounded animate-pulse"></div>
-          </div>
-          <div className="lg:hidden">
-            <div className="h-8 w-8 bg-gray-800 rounded animate-pulse"></div>
-          </div>
-        </div>
-      </nav>
-    );
-  }
+  // Helper function to render skeleton loaders for user-dependent items
+  const renderUserSkeleton = () => (
+    <>
+      <div className="h-8 w-20 bg-gray-800 rounded animate-pulse"></div>
+      <div className="h-8 w-20 bg-gray-800 rounded animate-pulse"></div>
+    </>
+  );
+
+  const renderMobileUserSkeleton = () => (
+    <>
+      <div className="flex items-center px-4 py-3">
+        <div className="h-5 w-5 bg-gray-800 rounded animate-pulse mr-3"></div>
+        <div className="h-5 w-20 bg-gray-800 rounded animate-pulse"></div>
+      </div>
+      <div className="flex items-center px-4 py-3">
+        <div className="h-5 w-5 bg-gray-800 rounded animate-pulse mr-3"></div>
+        <div className="h-5 w-24 bg-gray-800 rounded animate-pulse"></div>
+      </div>
+    </>
+  );
 
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? "bg-black/95 backdrop-blur-md shadow-xl" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto flex justify-between items-center px-4 py-3 lg:px-8">
 
-        {/* Logo */}
+        {/* Logo - Always visible */}
         <Link
           href="/"
           className="cursor-pointer group"
@@ -263,7 +251,7 @@ export default function Navbar() {
         {/* Desktop Menu */}
         <div className="hidden lg:flex items-center gap-6 relative">
 
-          {/* Menu Dropdown */}
+          {/* Menu Dropdown - Always visible */}
           <div className="relative menu-dropdown-container">
             <button
               onClick={() => {
@@ -317,7 +305,7 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Regular Menu Items */}
+          {/* Regular Menu Items - Always visible */}
           {navItems.map(item => (
             <Link
               key={item.name}
@@ -337,126 +325,96 @@ export default function Navbar() {
             </Link>
           ))}
 
-          {/* Dashboard dropdown - role-aware (Super Admin or Branch Manager only) */}
-          {user && profile && (isSuperAdmin || isBranchAdmin) && (
-            <div className="relative dashboard-dropdown-container">
-              <button
-                onClick={() => {
-                  setDashboardDropdownOpen(!dashboardDropdownOpen);
-                  setMenuOpen(false);
-                  setBranchesDropdownOpen(false);
-                }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${dashboardDropdownOpen
-                  ? "text-emerald-400 bg-emerald-400/10"
-                  : "text-white hover:text-emerald-300 hover:bg-white/5"
-                  }`}
-              >
-                <LayoutDashboard size={18} />
-                Dashboard
-                <ChevronDown size={16} className={`transition-transform duration-200 ${dashboardDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
+          {/* User-dependent sections with loading states */}
+          {userLoading ? (
+            // Show skeletons while loading
+            renderUserSkeleton()
+          ) : (
+            <>
+              {/* Dashboard dropdown - role-aware (Super Admin or Branch Manager only) */}
+              {user && profile && (isSuperAdmin || isBranchAdmin) && (
+                <div className="relative dashboard-dropdown-container">
+                  <button
+                    onClick={() => {
+                      setDashboardDropdownOpen(!dashboardDropdownOpen);
+                      setMenuOpen(false);
+                      setBranchesDropdownOpen(false);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${dashboardDropdownOpen
+                      ? "text-emerald-400 bg-emerald-400/10"
+                      : "text-white hover:text-emerald-300 hover:bg-white/5"
+                      }`}
+                  >
+                    <LayoutDashboard size={18} />
+                    Dashboard
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${dashboardDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-              {dashboardDropdownOpen && (
-                <div className="absolute top-full mt-2 left-0 w-64 bg-gray-900 border border-gray-800 text-white shadow-2xl rounded-xl z-50 overflow-hidden">
-                  <div className="p-2">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                      Dashboard
+                  {dashboardDropdownOpen && (
+                    <div className="absolute top-full mt-2 left-0 w-64 bg-gray-900 border border-gray-800 text-white shadow-2xl rounded-xl z-50 overflow-hidden">
+                      <div className="p-2">
+                        <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                          Dashboard
+                        </div>
+                        <Link
+                          href="/dashboard"
+                          className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
+                          onClick={() => setDashboardDropdownOpen(false)}
+                        >
+                          <LayoutDashboard size={18} className="mr-3 text-emerald-400" />
+                          <div className="font-medium text-white group-hover:text-emerald-300">Dashboard</div>
+                        </Link>
+                        <Link
+                          href="/dashboard/foods"
+                          className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
+                          onClick={() => setDashboardDropdownOpen(false)}
+                        >
+                          <UtensilsCrossed size={18} className="mr-3 text-emerald-400" />
+                          <div className="font-medium text-white group-hover:text-emerald-300">Food Management</div>
+                        </Link>
+                        {isSuperAdmin && (
+                          <>
+                            <Link
+                              href="/dashboard/manage_branches"
+                              className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
+                              onClick={() => setDashboardDropdownOpen(false)}
+                            >
+                              <Store size={18} className="mr-3 text-blue-400" />
+                              <div className="font-medium text-white group-hover:text-emerald-300">Manage Branches</div>
+                            </Link>
+                            <Link
+                              href="/dashboard/set_branch_admin"
+                              className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
+                              onClick={() => setDashboardDropdownOpen(false)}
+                            >
+                              <Users size={18} className="mr-3 text-purple-400" />
+                              <div className="font-medium text-white group-hover:text-emerald-300">Manage Branch Managers</div>
+                            </Link>
+                          </>
+                        )}
+                        {isBranchAdmin && (
+                          <Link
+                            href="/add_items"
+                            className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
+                            onClick={() => setDashboardDropdownOpen(false)}
+                          >
+                            <PlusCircle size={18} className="mr-3 text-emerald-400" />
+                            <div className="font-medium text-white group-hover:text-emerald-300">Add Food</div>
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                    <Link
-                      href="/dashboard"
-                      className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
-                      onClick={() => setDashboardDropdownOpen(false)}
-                    >
-                      <LayoutDashboard size={18} className="mr-3 text-emerald-400" />
-                      <div className="font-medium text-white group-hover:text-emerald-300">Dashboard</div>
-                    </Link>
-                    <Link
-                      href="/dashboard/foods"
-                      className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
-                      onClick={() => setDashboardDropdownOpen(false)}
-                    >
-                      <UtensilsCrossed size={18} className="mr-3 text-emerald-400" />
-                      <div className="font-medium text-white group-hover:text-emerald-300">Food Management</div>
-                    </Link>
-                    {isSuperAdmin && (
-                      <>
-                        <Link
-                          href="/dashboard/manage_branches"
-                          className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
-                          onClick={() => setDashboardDropdownOpen(false)}
-                        >
-                          <Store size={18} className="mr-3 text-blue-400" />
-                          <div className="font-medium text-white group-hover:text-emerald-300">Manage Branches</div>
-                        </Link>
-                        <Link
-                          href="/dashboard/set_branch_admin"
-                          className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
-                          onClick={() => setDashboardDropdownOpen(false)}
-                        >
-                          <Users size={18} className="mr-3 text-purple-400" />
-                          <div className="font-medium text-white group-hover:text-emerald-300">Manage Branch Managers</div>
-                        </Link>
-                      </>
-                    )}
-                    {isBranchAdmin && (
-                      <Link
-                        href="/add_items"
-                        className="flex items-center w-full px-4 py-3 text-left hover:bg-gray-800 rounded-lg transition-colors duration-150 cursor-pointer group"
-                        onClick={() => setDashboardDropdownOpen(false)}
-                      >
-                        <PlusCircle size={18} className="mr-3 text-emerald-400" />
-                        <div className="font-medium text-white group-hover:text-emerald-300">Add Food</div>
-                      </Link>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* User Info - فقط اگر user وجود داشته باشد */}
-          {user && profile && (
-            <>
-              {/* My Profile - همیشه نمایش داده می‌شود */}
-              <Link
-                href="/profile"
-                className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/profile'
-                  ? "text-emerald-400 bg-emerald-400/10"
-                  : "text-white hover:text-emerald-300 hover:bg-white/5"
-                  }`}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setDashboardDropdownOpen(false);
-                  setBranchesDropdownOpen(false);
-                }}
-              >
-                <User size={18} className="mr-2" />
-                My Profile
-              </Link>
-
-              {/* Orders nav item - role based */}
-              {isBranchAdmin && profile?.branch_id != null ? (
-                <Link
-                  href={`/${profile.branch_id}/orders`}
-                  className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === `/${profile.branch_id}/orders`
-                    ? "text-emerald-400 bg-emerald-400/10"
-                    : "text-white hover:text-emerald-300 hover:bg-white/5"
-                    }`}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setDashboardDropdownOpen(false);
-                    setBranchesDropdownOpen(false);
-                  }}
-                >
-                  <Package size={18} className="mr-2" />
-                  Manage Orders
-                </Link>
-              ) : (
-                // فقط کاربران عادی My Orders را ببینند
-                !isSuperAdmin && (
+              {/* User Info - فقط اگر user وجود داشته باشد */}
+              {user && profile && (
+                <>
+                  {/* My Profile - همیشه نمایش داده می‌شود */}
                   <Link
-                    href="/orders"
-                    className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/orders'
+                    href="/profile"
+                    className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/profile'
                       ? "text-emerald-400 bg-emerald-400/10"
                       : "text-white hover:text-emerald-300 hover:bg-white/5"
                       }`}
@@ -466,20 +424,57 @@ export default function Navbar() {
                       setBranchesDropdownOpen(false);
                     }}
                   >
-                    <Package size={18} className="mr-2" />
-                    My Orders
+                    <User size={18} className="mr-2" />
+                    My Profile
                   </Link>
-                )
+
+                  {/* Orders nav item - role based */}
+                  {isBranchAdmin && profile?.branch_id != null ? (
+                    <Link
+                      href={`/${profile.branch_id}/orders`}
+                      className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === `/${profile.branch_id}/orders`
+                        ? "text-emerald-400 bg-emerald-400/10"
+                        : "text-white hover:text-emerald-300 hover:bg-white/5"
+                        }`}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setDashboardDropdownOpen(false);
+                        setBranchesDropdownOpen(false);
+                      }}
+                    >
+                      <Package size={18} className="mr-2" />
+                      Manage Orders
+                    </Link>
+                  ) : (
+                    // فقط کاربران عادی My Orders را ببینند
+                    !isSuperAdmin && (
+                      <Link
+                        href="/orders"
+                        className={`flex items-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 cursor-pointer ${pathname === '/orders'
+                          ? "text-emerald-400 bg-emerald-400/10"
+                          : "text-white hover:text-emerald-300 hover:bg-white/5"
+                          }`}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setDashboardDropdownOpen(false);
+                          setBranchesDropdownOpen(false);
+                        }}
+                      >
+                        <Package size={18} className="mr-2" />
+                        My Orders
+                      </Link>
+                    )
+                  )}
+                </>
               )}
             </>
           )}
 
-
-
-
-          {/* Login / Logout */}
+          {/* Login / Logout - Always visible but content changes based on user state */}
           <div className="ml-2">
-            {user ? (
+            {userLoading ? (
+              <div className="h-8 w-16 bg-gray-800 rounded animate-pulse"></div>
+            ) : user ? (
               <button
                 onClick={logout}
                 disabled={isLoggingOut}
@@ -515,7 +510,7 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Cart Button - Desktop */}
+          {/* Cart Button - Desktop - Always visible when branch exists */}
           {currentBranchId && (
             <Link
               href={`/${currentBranchId}/cart`}
@@ -532,7 +527,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile Header */}
+        {/* Mobile Header - Always visible */}
         <div className="lg:hidden flex items-center gap-3">
           {/* Cart Button - Mobile */}
           {currentBranchId && (
@@ -567,7 +562,7 @@ export default function Navbar() {
         >
           <div className="px-4 py-3 space-y-1">
 
-            {/* Menu Dropdown - Mobile */}
+            {/* Menu Dropdown - Mobile - Always visible */}
             <div className="space-y-1">
               <button
                 onClick={() => setMobileMenuDropdownOpen(!mobileMenuDropdownOpen)}
@@ -616,7 +611,7 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Regular Menu Items - Mobile */}
+            {/* Regular Menu Items - Mobile - Always visible */}
             {navItems.map(item => (
               <Link
                 key={item.name}
@@ -631,121 +626,131 @@ export default function Navbar() {
               </Link>
             ))}
 
-            {/* Dashboard - Mobile (Super Admin or Branch Manager only) */}
-            {user && profile && (isSuperAdmin || isBranchAdmin) && (
-              <div className="space-y-1">
-                <button
-                  onClick={() => setMobileDashboardOpen(!mobileDashboardOpen)}
-                  className="flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <LayoutDashboard size={20} className="mr-3" />
-                    <span className="font-medium">Dashboard</span>
-                  </div>
-                  <ChevronDown size={18} className={`transition-transform duration-200 ${mobileDashboardOpen ? "rotate-180" : ""}`} />
-                </button>
-                {mobileDashboardOpen && (
-                  <div className="ml-8 space-y-1 border-l border-gray-800 pl-3">
-                    <Link
-                      href="/dashboard"
-                      className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                      onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
+            {/* User-dependent mobile sections with loading states */}
+            {userLoading ? (
+              renderMobileUserSkeleton()
+            ) : (
+              <>
+                {/* Dashboard - Mobile (Super Admin or Branch Manager only) */}
+                {user && profile && (isSuperAdmin || isBranchAdmin) && (
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setMobileDashboardOpen(!mobileDashboardOpen)}
+                      className="flex items-center justify-between w-full px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                     >
-                      <LayoutDashboard size={16} className="mr-3 text-emerald-400" />
-                      <span>Dashboard</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/foods"
-                      className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                      onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
-                    >
-                      <UtensilsCrossed size={16} className="mr-3 text-emerald-400" />
-                      <span>Food Management</span>
-                    </Link>
-                    {isSuperAdmin && (
-                      <>
+                      <div className="flex items-center">
+                        <LayoutDashboard size={20} className="mr-3" />
+                        <span className="font-medium">Dashboard</span>
+                      </div>
+                      <ChevronDown size={18} className={`transition-transform duration-200 ${mobileDashboardOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {mobileDashboardOpen && (
+                      <div className="ml-8 space-y-1 border-l border-gray-800 pl-3">
                         <Link
-                          href="/dashboard/manage_branches"
+                          href="/dashboard"
                           className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                           onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
                         >
-                          <Store size={16} className="mr-3 text-blue-400" />
-                          <span>Manage Branches</span>
+                          <LayoutDashboard size={16} className="mr-3 text-emerald-400" />
+                          <span>Dashboard</span>
                         </Link>
                         <Link
-                          href="/dashboard/set_branch_admin"
+                          href="/dashboard/foods"
                           className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                           onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
                         >
-                          <Users size={16} className="mr-3 text-purple-400" />
-                          <span>Manage Branch Managers</span>
+                          <UtensilsCrossed size={16} className="mr-3 text-emerald-400" />
+                          <span>Food Management</span>
                         </Link>
-                      </>
-                    )}
-                    {isBranchAdmin && (
-                      <Link
-                        href="/add_items"
-                        className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                        onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
-                      >
-                        <PlusCircle size={16} className="mr-3 text-emerald-400" />
-                        <span>Add Food</span>
-                      </Link>
+                        {isSuperAdmin && (
+                          <>
+                            <Link
+                              href="/dashboard/manage_branches"
+                              className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                              onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
+                            >
+                              <Store size={16} className="mr-3 text-blue-400" />
+                              <span>Manage Branches</span>
+                            </Link>
+                            <Link
+                              href="/dashboard/set_branch_admin"
+                              className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                              onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
+                            >
+                              <Users size={16} className="mr-3 text-purple-400" />
+                              <span>Manage Branch Managers</span>
+                            </Link>
+                          </>
+                        )}
+                        {isBranchAdmin && (
+                          <Link
+                            href="/add_items"
+                            className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                            onClick={() => { setMobileOpen(false); setMobileDashboardOpen(false); }}
+                          >
+                            <PlusCircle size={16} className="mr-3 text-emerald-400" />
+                            <span>Add Food</span>
+                          </Link>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
-            {/* User Profile Links - Mobile */}
-            {user && profile && (
-              <>
-                {/* My Profile - همیشه نمایش داده می‌شود */}
-                <Link
-                  href="/profile"
-                  className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                  onClick={() => {
-                    setMobileOpen(false);
-                  }}
-                >
-                  <User size={20} className="mr-3" />
-                  <span className="font-medium">My Profile</span>
-                </Link>
-
-                {/* Orders nav item - role based */}
-                {isBranchAdmin && profile?.branch_id != null ? (
-                  <Link
-                    href={`/${profile.branch_id}/orders`}
-                    className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
-                    onClick={() => {
-                      setMobileOpen(false);
-                    }}
-                  >
-                    <Package size={20} className="mr-3" />
-                    <span className="font-medium">Manage Orders</span>
-                  </Link>
-                ) : (
-                  // فقط کاربران عادی My Orders را ببینند
-                  !isSuperAdmin && (
+                {/* User Profile Links - Mobile */}
+                {user && profile && (
+                  <>
+                    {/* My Profile - همیشه نمایش داده می‌شود */}
                     <Link
-                      href="/orders"
+                      href="/profile"
                       className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
                       onClick={() => {
                         setMobileOpen(false);
                       }}
                     >
-                      <Package size={20} className="mr-3" />
-                      <span className="font-medium">My Orders</span>
+                      <User size={20} className="mr-3" />
+                      <span className="font-medium">My Profile</span>
                     </Link>
-                  )
+
+                    {/* Orders nav item - role based */}
+                    {isBranchAdmin && profile?.branch_id != null ? (
+                      <Link
+                        href={`/${profile.branch_id}/orders`}
+                        className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                        onClick={() => {
+                          setMobileOpen(false);
+                        }}
+                      >
+                        <Package size={20} className="mr-3" />
+                        <span className="font-medium">Manage Orders</span>
+                      </Link>
+                    ) : (
+                      // فقط کاربران عادی My Orders را ببینند
+                      !isSuperAdmin && (
+                        <Link
+                          href="/orders"
+                          className="flex items-center px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setMobileOpen(false);
+                          }}
+                        >
+                          <Package size={20} className="mr-3" />
+                          <span className="font-medium">My Orders</span>
+                        </Link>
+                      )
+                    )}
+                  </>
                 )}
               </>
             )}
 
-
-
             {/* Login / Logout Mobile */}
             <div className="pt-2 border-t border-gray-800 mt-2">
-              {user ? (
+              {userLoading ? (
+                <div className="flex items-center px-4 py-3">
+                  <div className="h-5 w-5 bg-gray-800 rounded animate-pulse mr-3"></div>
+                  <div className="h-5 w-16 bg-gray-800 rounded animate-pulse"></div>
+                </div>
+              ) : user ? (
                 <button
                   onClick={() => {
                     setMobileOpen(false);
