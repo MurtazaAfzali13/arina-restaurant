@@ -30,7 +30,7 @@ export async function POST(_request: NextRequest) {
     if (!hasInternalSecret) {
       // Cookie-based auth (preferred for internal calls).
       const cookieStore = await cookies();
-      const routeClient = createRouteHandlerClient({ cookies: () => cookieStore });
+      const routeClient = createRouteHandlerClient({ cookies: async () => cookieStore });
       const { data: sessionData } = await routeClient.auth.getSession();
       const userId = sessionData.session?.user?.id ?? null;
 

@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Attach user_id from session cookie if present (so `/orders` works for customers).
     const cookieStore = await cookies();
-    const supabaseAuth = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabaseAuth = createRouteHandlerClient({ cookies: async () => cookieStore });
     const { data: sessionData } = await supabaseAuth.auth.getSession();
     const sessionUserId = sessionData.session?.user?.id ?? null;
 
