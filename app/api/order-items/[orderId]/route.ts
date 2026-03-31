@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { isOrderExpired } from '@/lib/orderExpiry';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -28,12 +29,16 @@ export async function GET(
     // ابتدا بررسی می‌کنیم که کاربر به این سفارش دسترسی دارد
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('user_id')
+      .select('user_id, created_at, status')
       .eq('id', orderId)
       .single();
 
     if (orderError || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (isOrderExpired({ created_at: order.created_at, status: order.status })) {
+      return NextResponse.json({ error: 'Order expired' }, { status: 404 });
     }
 
     // اگر کاربر ID وجود دارد و لاگین کرده، بررسی می‌کنیم

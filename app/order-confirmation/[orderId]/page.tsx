@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 type Order = {
   id: string;
@@ -27,6 +28,8 @@ type OrderItem = {
 export default function OrderConfirmationPage() {
   const params = useParams();
   const orderId = params.orderId as string;
+
+  const supabase = useMemo(() => createClientComponentClient(), []);
   
   const [order, setOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -38,24 +41,53 @@ export default function OrderConfirmationPage() {
       try {
         setLoading(true);
         
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+
+        if (!token) {
+          throw new Error('Please log in to view order details');
+        }
+
         // دریافت اطلاعات سفارش
-        const orderResponse = await fetch(`/api/orders/${orderId}`);
+        const orderResponse = await fetch(`/api/orders/${orderId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!orderResponse.ok) {
           throw new Error('Failed to fetch order');
         }
         const orderData = await orderResponse.json();
-        setOrder(orderData);
+        setOrder({
+          ...orderData,
+          total_amount: Number(orderData.total_amount),
+          final_amount: Number(orderData.final_amount),
+        });
 
-        // دریافت آیتم‌های سفارش
-        const itemsResponse = await fetch(`/api/orders/${orderId}/items`);
+        // دریافت آیتم‌های سفارش (secure endpoint)
+        const itemsResponse = await fetch(`/api/order-items/${orderId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (itemsResponse.ok) {
           const itemsData = await itemsResponse.json();
-          setOrderItems(itemsData);
+          const itemsDataSafe = Array.isArray(itemsData) ? itemsData : [];
+          setOrderItems(
+            (itemsDataSafe as Array<{
+              id: string;
+              meal_name: string;
+              meal_price: string | number;
+              quantity: string | number;
+              subtotal: string | number;
+            }>).map((it) => ({
+              ...it,
+              meal_price: Number(it.meal_price),
+              quantity: Number(it.quantity),
+              subtotal: Number(it.subtotal),
+            }))
+          );
         }
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Failed to fetch order:', error);
-        setError(error.message);
+        setError(error instanceof Error ? error.message : 'Failed to fetch order');
       } finally {
         setLoading(false);
       }

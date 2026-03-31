@@ -339,9 +339,9 @@ function OrdersContent({ branchId }: { branchId: string }) {
                 }
             }
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('❌ Error in fetchOrders:', err);
-            setError(err.message || 'Error loading orders');
+            setError(err instanceof Error ? err.message : 'Error loading orders');
         } finally {
             setLoading(false);
         }

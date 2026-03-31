@@ -1,6 +1,7 @@
 // app/api/branches/[branch]/orders/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isOrderExpired } from '@/lib/orderExpiry';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -100,7 +101,11 @@ async function handleOrdersRequest(request: NextRequest, branch: string) {
     return NextResponse.json({ error: 'Failed to fetch orders from database' }, { status: 500 });
   }
 
-  return NextResponse.json(orders || [], {
+  const visibleOrders = (orders || []).filter((o: any) =>
+    !isOrderExpired({ created_at: o.created_at, status: o.status })
+  );
+
+  return NextResponse.json(visibleOrders, {
     headers: { 'Cache-Control': 'no-store, max-age=0' }
   });
 }

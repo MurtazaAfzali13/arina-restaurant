@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { isOrderExpired } from '@/lib/orderExpiry';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -52,6 +53,10 @@ export async function GET(
 
     if (error || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (isOrderExpired({ created_at: order.created_at, status: order.status })) {
+      return NextResponse.json({ error: 'Order expired' }, { status: 404 });
     }
 
     if (profile.role === 'super_admin') {

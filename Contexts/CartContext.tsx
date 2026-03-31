@@ -381,6 +381,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [state]);
 
+  // Multi-tab synchronization: if another tab changes the cart, reflect it here.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== CART_STORAGE_KEY) return;
+      if (!e.newValue) return;
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (parsed?.version && parsed?.branchCarts) {
+          dispatch({ type: "SYNC_CART", payload: parsed as CartState });
+        }
+      } catch (err) {
+        console.error("Failed to sync cart from storage event:", err);
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [dispatch]);
+
   // محاسبه مقادیر با useMemo برای عملکرد بهتر
   const { totalPrice, totalItems, totalUniqueItems, branchSummaries } = useMemo(() => {
     const allItems = Object.values(state.branchCarts)

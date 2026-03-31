@@ -109,31 +109,31 @@ export default function FoodsPage() {
         <div className="rounded-2xl border border-red-800/50 bg-red-900/20 p-6 text-sm text-red-300">{error}</div>
       ) : foods.length === 0 ? (
         <div className="rounded-2xl border border-slate-600/50 bg-slate-700/30 p-6 text-sm text-slate-400">No foods found.</div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        ) : (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {foods.map((food) => (
             <div
               key={food.id}
-              className="rounded-2xl border border-slate-600/50 bg-slate-700/30 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-700/50"
+              className="rounded-2xl border border-slate-600/50 bg-slate-700/30 p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-500 hover:bg-slate-700/50 min-h-[220px] flex flex-col"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-4">
                 <img
                   src={food.image_url || "/images/restaurant/restaurant1.jpg"}
                   alt={food.name}
-                  className="h-16 w-16 rounded-xl object-cover"
+                  className="h-20 w-20 rounded-xl object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = "/images/restaurant/restaurant1.jpg";
                   }}
                 />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-slate-100">{food.name}</div>
-                  <div className="text-xs text-slate-500">{food.category || "Uncategorized"}</div>
-                  <div className="mt-2 text-lg font-semibold text-emerald-400">
+                  <div className="text-base font-semibold text-slate-100">{food.name}</div>
+                  <div className="text-xs text-slate-500 mt-1">{food.category || "Uncategorized"}</div>
+                  <div className="mt-3 text-lg font-semibold text-emerald-400">
                     {(food.price || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </div>
                 </div>
               </div>
-              <div className="mt-3 flex justify-between text-xs text-slate-500">
+              <div className="mt-auto pt-5 flex justify-between text-xs text-slate-500">
                 <span>Branch #{food.branch_id ?? "—"}</span>
                 {isBranchManager ? (
                   <button

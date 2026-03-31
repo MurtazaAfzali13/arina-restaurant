@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, ShoppingBag } from 'lucide-react';
-import { useCart } from '@/Contexts/CartContext';
+import { useCart, type CartItem } from '@/Contexts/CartContext';
+import { calcTaxAndTotalFromCents, toCents } from '@/lib/pricing';
 
 type CheckoutForm = {
   name: string;
@@ -25,6 +26,7 @@ export default function CheckoutClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successOrders, setSuccessOrders] = useState<string[]>([]);
+  const isSubmittingRef = useRef(false);
 
   const [form, setForm] = useState<CheckoutForm>({
     name: '',
@@ -37,11 +39,12 @@ export default function CheckoutClient() {
   });
 
   // ✅ انتخاب سبدها
-  const branchEntries = branchIdParam
+  type BranchEntry = [string, { items: CartItem[]; branchName?: string; lastUpdated?: string }];
+  const branchEntries = (branchIdParam
     ? Object.entries(state.branchCarts).filter(
         ([id]) => Number(id) === Number(branchIdParam)
       )
-    : Object.entries(state.branchCarts);
+    : Object.entries(state.branchCarts)) as BranchEntry[];
 
   // 🔄 اگر branch مشخص است ولی سبدش خالی است
   useEffect(() => {
@@ -50,16 +53,26 @@ export default function CheckoutClient() {
     }
   }, [branchIdParam, branchEntries, router]);
 
-  // 💰 total بر اساس branch
-  const checkoutTotal = branchEntries.reduce((sum, [, branch]) => {
+  // 💰 totals (precision-safe via cents)
+  const itemsSubtotalCents = branchEntries.reduce((sum, [, branch]) => {
     return (
       sum +
       branch.items.reduce(
-        (s: number, item: any) => s + item.price * item.quantity,
+        (s: number, item: CartItem) => s + toCents(item.price) * item.quantity,
         0
       )
     );
   }, 0);
+
+  const deliveryFeeTotal = form.delivery_type === 'delivery' ? 5 * branchEntries.length : 0;
+  const deliveryFeeTotalCents = toCents(deliveryFeeTotal);
+
+  const totals = calcTaxAndTotalFromCents({
+    subtotalCents: itemsSubtotalCents,
+    deliveryFeeCents: deliveryFeeTotalCents,
+  });
+
+  const finalTotal = totals.finalAmount;
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -70,6 +83,8 @@ export default function CheckoutClient() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     setError(null);
     setSuccessOrders([]);
@@ -91,7 +106,7 @@ export default function CheckoutClient() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             branch_id: Number(branchId),
-            items: branch.items.map((item: any) => ({
+            items: branch.items.map((item) => ({
               meal_id: item.id,
               meal_name: item.name,
               meal_price: item.price,
@@ -106,7 +121,8 @@ export default function CheckoutClient() {
                 form.delivery_type === 'delivery' ? form.address : undefined
             },
             payment_method: form.payment_method,
-            delivery_type: form.delivery_type
+            delivery_type: form.delivery_type,
+            delivery_fee: deliveryFeeTotal / Math.max(1, branchEntries.length)
           })
         });
 
@@ -120,11 +136,12 @@ export default function CheckoutClient() {
       }
 
       clearAll();
-      router.push(`/order-confirmation?orders=${orderResults.join(',')}`);
-    } catch (err: any) {
-      setError(err.message);
+      router.push(`/order-confirmation/${orderResults[0]}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Checkout failed");
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -138,12 +155,12 @@ export default function CheckoutClient() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white pt-24 pb-12">
+    <div className="min-h-screen bg-gray-800 pt-24 pb-12">
       <div className="container mx-auto px-4 grid gap-8 lg:grid-cols-3">
         {/* FORM */}
         <form
           onSubmit={handleSubmit}
-          className="lg:col-span-2 rounded-2xl bg-white p-6 shadow-lg space-y-6"
+          className="lg:col-span-2 rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700 space-y-6 text-white"
         >
           {error && (
             <div className="rounded-lg bg-red-50 p-4 text-red-700">
@@ -167,34 +184,34 @@ export default function CheckoutClient() {
           >
             {loading
               ? 'در حال پردازش...'
-              : `ثبت سفارش - $${checkoutTotal.toFixed(2)}`}
+              : `ثبت سفارش - $${finalTotal.toFixed(2)}`}
           </button>
         </form>
 
         {/* SUMMARY */}
-        <div className="sticky top-24 rounded-2xl bg-white p-6 shadow-lg">
+        <div className="sticky top-24 rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700 text-white">
           <h2 className="mb-4 text-xl font-semibold">خلاصه سفارش</h2>
 
           {branchEntries.map(([branchId, branch]) => (
-            <div key={branchId} className="mb-4 border rounded-lg p-4">
+            <div key={branchId} className="mb-4 border border-gray-600 rounded-lg p-4 bg-gray-900">
               <h3 className="font-medium mb-2">
                 {branch.branchName || `Branch ${branchId}`}
               </h3>
-              {branch.items.map((item: any) => (
-                <div key={item.id} className="flex justify-between text-sm">
+              {branch.items.map((item: CartItem) => (
+                <div key={item.id} className="flex justify-between text-sm text-gray-300">
                   <span>
                     {item.name} × {item.quantity}
                   </span>
-                  <span>${(item.price * item.quantity).toFixed(2)}</span>
+                  <span>${((toCents(item.price) * item.quantity) / 100).toFixed(2)}</span>
                 </div>
               ))}
             </div>
           ))}
 
-          <div className="border-t pt-4 flex justify-between text-lg font-bold">
+          <div className="border-t border-gray-600 pt-4 flex justify-between text-lg font-bold">
             <span>جمع کل</span>
             <span className="text-emerald-600">
-              ${checkoutTotal.toFixed(2)}
+              ${finalTotal.toFixed(2)}
             </span>
           </div>
         </div>

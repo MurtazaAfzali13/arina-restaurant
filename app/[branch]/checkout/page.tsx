@@ -3,7 +3,7 @@
 'use client';
 
 import { use } from 'react'; // اضافه کنید
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { 
@@ -16,6 +16,7 @@ import {
   FiUser 
 } from 'react-icons/fi';
 import { useCart } from '@/Contexts/CartContext';
+import { calcTaxAndTotalFromCents, toCents } from '@/lib/pricing';
 
 type CheckoutForm = {
   name: string;
@@ -43,6 +44,8 @@ export default function BranchCheckoutPage({
     order_id: string;
   } | null>(null);
 
+  const isSubmittingRef = useRef(false);
+
   const [form, setForm] = useState<CheckoutForm>({
     name: '',
     phone: '',
@@ -53,12 +56,46 @@ export default function BranchCheckoutPage({
     special_instructions: ''
   });
 
+  const branchName = branch
+    ? branch === "1"
+      ? "Kabul"
+      : branch === "2"
+        ? "Herat"
+        : `Branch ${branch}`
+    : "";
+
+  const branchCart = branch ? state.branchCarts[Number(branch)] : undefined;
+  const items = branchCart?.items || [];
+  const itemCount = branchCart?.items.length ?? 0;
+  
+  const itemsSubtotalCents = items.reduce(
+    (sum, item) => sum + toCents(item.price) * item.quantity,
+    0
+  );
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const deliveryFee = form.delivery_type === 'delivery' ? 5 : 0;
+  const deliveryFeeCents = form.delivery_type === 'delivery' ? toCents(deliveryFee) : 0;
+  const totals = calcTaxAndTotalFromCents({
+    subtotalCents: itemsSubtotalCents,
+    deliveryFeeCents,
+  });
+  const taxAmount = totals.taxAmount;
+  const finalTotal = totals.finalAmount;
+
+  // اگر سبد این شعبه خالی باشد، برگرد به منو
+  useEffect(() => {
+    if (!branch) return;
+    if (itemCount === 0 && !successOrder) {
+      router.push(`/${branch}/menu`);
+    }
+  }, [itemCount, branch, router, successOrder]);
+
   // بررسی اینکه branchId مقدار دارد
   if (!branch) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white pt-24">
+      <div className="min-h-screen bg-gray-800 pt-24">
         <div className="container mx-auto px-4 text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">Branch not found</h1>
+          <h1 className="text-2xl font-bold text-white mb-4">Branch not found</h1>
           <button
             onClick={() => router.push('/')}
             className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 py-3 font-semibold text-white"
@@ -70,22 +107,6 @@ export default function BranchCheckoutPage({
     );
   }
 
-  const branchName = branch === "1" ? "Kabul" : branch === "2" ? "Herat" : `Branch ${branch}`;
-  const branchCart = state.branchCarts[Number(branch)];
-  const items = branchCart?.items || [];
-  
-  const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  const deliveryFee = form.delivery_type === 'delivery' ? 5 : 0;
-  const finalTotal = totalPrice + deliveryFee;
-
-  // اگر سبد این شعبه خالی باشد، برگرد به منو
-  useEffect(() => {
-    if (items.length === 0 && !successOrder) {
-      router.push(`/${branch}/menu`);
-    }
-  }, [items, branch, router, successOrder]);
-
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -95,6 +116,8 @@ export default function BranchCheckoutPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -136,7 +159,7 @@ export default function BranchCheckoutPage({
           payment_method: form.payment_method,
           delivery_type: form.delivery_type,
           delivery_fee: deliveryFee,
-          total_amount: finalTotal,
+          total_amount: itemsSubtotalCents / 100 + deliveryFee,
           order_date: new Date().toISOString()
         })
       });
@@ -163,20 +186,21 @@ export default function BranchCheckoutPage({
         router.push(`/order-confirmation/${data.order_id}?branch=${branch}`);
       }, 3000);
 
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during checkout');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred during checkout');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   if (items.length === 0 && !successOrder) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white pt-24">
+      <div className="min-h-screen bg-gray-800 pt-24">
         <div className="container mx-auto px-4 text-center">
           <FiShoppingBag className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Your cart is empty</h1>
-          <p className="text-gray-600 mb-6">Please add items to your cart first</p>
+          <h1 className="text-2xl font-bold text-white mb-2">Your cart is empty</h1>
+          <p className="text-gray-300 mb-6">Please add items to your cart first</p>
           <button
             onClick={() => router.push(`/${branch}/menu`)}
             className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 py-3 font-semibold text-white hover:shadow-lg transition-shadow"
@@ -189,7 +213,7 @@ export default function BranchCheckoutPage({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white pt-24 pb-12">
+    <div className="min-h-screen bg-gray-800 pt-24 pb-12">
       <div className="container mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
@@ -200,10 +224,10 @@ export default function BranchCheckoutPage({
             <FiArrowLeft /> Back to Cart
           </button>
           
-          <h1 className="text-3xl font-bold text-gray-800">
+          <h1 className="text-3xl font-bold text-white">
             {branchName} Branch Checkout
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-gray-300">
             Complete your order from {branchName} branch
           </p>
         </div>
@@ -240,14 +264,14 @@ export default function BranchCheckoutPage({
           <div className="lg:col-span-2">
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* بخش اطلاعات مشتری */}
-              <div className="rounded-2xl bg-white p-6 shadow-lg border border-gray-100">
-                <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <div className="rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700">
+                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                   <FiUser className="text-emerald-500" /> Customer Information
                 </h2>
                 
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       Full Name *
                     </label>
                     <input
@@ -257,13 +281,13 @@ export default function BranchCheckoutPage({
                       onChange={handleInputChange}
                       required
                       disabled={loading || successOrder !== null}
-                      className="w-full rounded-xl border border-gray-300 p-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full rounded-xl border border-gray-600 bg-gray-900 p-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300/30 focus:outline-none transition-colors placeholder:text-gray-300 disabled:bg-gray-800 disabled:cursor-not-allowed"
                       placeholder="Enter your full name"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       Phone Number *
                     </label>
                     <input
@@ -273,13 +297,13 @@ export default function BranchCheckoutPage({
                       onChange={handleInputChange}
                       required
                       disabled={loading || successOrder !== null}
-                      className="w-full rounded-xl border border-gray-300 p-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full rounded-xl border border-gray-600 bg-gray-900 p-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300/30 focus:outline-none transition-colors placeholder:text-gray-300 disabled:bg-gray-800 disabled:cursor-not-allowed"
                       placeholder="Enter your phone number"
                     />
                   </div>
                   
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       Email Address *
                     </label>
                     <input
@@ -289,7 +313,7 @@ export default function BranchCheckoutPage({
                       onChange={handleInputChange}
                       required
                       disabled={loading || successOrder !== null}
-                      className="w-full rounded-xl border border-gray-300 p-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full rounded-xl border border-gray-600 bg-gray-900 p-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300/30 focus:outline-none transition-colors placeholder:text-gray-300 disabled:bg-gray-800 disabled:cursor-not-allowed"
                       placeholder="Enter your email address"
                     />
                   </div>
@@ -297,8 +321,8 @@ export default function BranchCheckoutPage({
               </div>
 
               {/* بخش نوع تحویل */}
-              <div className="rounded-2xl bg-white p-6 shadow-lg border border-gray-100">
-                <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <div className="rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700">
+                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                   <FiTruck className="text-emerald-500" /> Delivery Method
                 </h2>
                 
@@ -306,15 +330,15 @@ export default function BranchCheckoutPage({
                   <label className={`flex items-center justify-between rounded-xl border-2 p-4 cursor-pointer transition-all ${
                     form.delivery_type === 'pickup' 
                       ? 'border-emerald-500 bg-emerald-50' 
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border-gray-600 hover:border-gray-500'
                   } ${(loading || successOrder) ? 'cursor-not-allowed opacity-70' : ''}`}>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-emerald-100 rounded-lg">
                         <FiShoppingBag className="text-emerald-600" />
                       </div>
                       <div>
-                        <div className="font-medium">Pickup</div>
-                        <div className="text-sm text-gray-500">Collect from branch</div>
+                        <div className="font-medium text-white">Pickup</div>
+                        <div className="text-sm text-gray-300">Collect from branch</div>
                         <div className="text-xs text-emerald-600 mt-1">No delivery fee</div>
                       </div>
                     </div>
@@ -332,15 +356,15 @@ export default function BranchCheckoutPage({
                   <label className={`flex items-center justify-between rounded-xl border-2 p-4 cursor-pointer transition-all ${
                     form.delivery_type === 'delivery' 
                       ? 'border-emerald-500 bg-emerald-50' 
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border-gray-600 hover:border-gray-500'
                   } ${(loading || successOrder) ? 'cursor-not-allowed opacity-70' : ''}`}>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-100 rounded-lg">
                         <FiTruck className="text-blue-600" />
                       </div>
                       <div>
-                        <div className="font-medium">Delivery</div>
-                        <div className="text-sm text-gray-500">Deliver to your address</div>
+                        <div className="font-medium text-white">Delivery</div>
+                        <div className="text-sm text-gray-300">Deliver to your address</div>
                         <div className="text-xs text-blue-600 mt-1">+ $5.00 delivery fee</div>
                       </div>
                     </div>
@@ -358,7 +382,7 @@ export default function BranchCheckoutPage({
 
                 {form.delivery_type === 'delivery' && (
                   <div className="mt-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       Delivery Address *
                     </label>
                     <textarea
@@ -368,7 +392,7 @@ export default function BranchCheckoutPage({
                       required
                       disabled={loading || successOrder !== null}
                       rows={3}
-                      className="w-full rounded-xl border border-gray-300 p-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full rounded-xl border border-gray-600 bg-gray-900 p-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300/30 focus:outline-none transition-colors placeholder:text-gray-300 disabled:bg-gray-800 disabled:cursor-not-allowed"
                       placeholder="Enter your complete delivery address..."
                     />
                   </div>
@@ -376,8 +400,8 @@ export default function BranchCheckoutPage({
               </div>
 
               {/* بخش روش پرداخت */}
-              <div className="rounded-2xl bg-white p-6 shadow-lg border border-gray-100">
-                <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+              <div className="rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700">
+                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                   <FiCreditCard className="text-emerald-500" /> Payment Method
                 </h2>
                 
@@ -388,7 +412,7 @@ export default function BranchCheckoutPage({
                       className={`flex items-center justify-between rounded-xl border-2 p-4 cursor-pointer transition-all ${
                         form.payment_method === method 
                           ? 'border-emerald-500 bg-emerald-50' 
-                          : 'border-gray-200 hover:border-gray-300'
+                          : 'border-gray-600 hover:border-gray-500'
                       } ${(loading || successOrder) ? 'cursor-not-allowed opacity-70' : ''}`}
                     >
                       <div className="flex items-center gap-3">
@@ -402,15 +426,15 @@ export default function BranchCheckoutPage({
                           }`} />
                         </div>
                         <div>
-                          <span className="font-medium capitalize">{method}</span>
+                          <span className="font-medium capitalize text-white">{method}</span>
                           {method === 'cash' && (
-                            <div className="text-xs text-gray-500">Pay when receiving</div>
+                            <div className="text-xs text-gray-300">Pay when receiving</div>
                           )}
                           {method === 'card' && (
-                            <div className="text-xs text-gray-500">Credit/Debit Card</div>
+                            <div className="text-xs text-gray-300">Credit/Debit Card</div>
                           )}
                           {method === 'online' && (
-                            <div className="text-xs text-gray-500">Online payment</div>
+                            <div className="text-xs text-gray-300">Online payment</div>
                           )}
                         </div>
                       </div>
@@ -429,8 +453,8 @@ export default function BranchCheckoutPage({
               </div>
 
               {/* بخش یادداشت‌ها */}
-              <div className="rounded-2xl bg-white p-6 shadow-lg border border-gray-100">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+              <div className="rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
                   Special Instructions (Optional)
                 </label>
                 <textarea
@@ -439,7 +463,7 @@ export default function BranchCheckoutPage({
                   onChange={handleInputChange}
                   disabled={loading || successOrder !== null}
                   rows={3}
-                  className="w-full rounded-xl border border-gray-300 p-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full rounded-xl border border-gray-600 bg-gray-900 p-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300/30 focus:outline-none transition-colors placeholder:text-gray-300 disabled:bg-gray-800 disabled:cursor-not-allowed"
                   placeholder="Any special requests or instructions for your order..."
                 />
               </div>
@@ -468,16 +492,16 @@ export default function BranchCheckoutPage({
 
           {/* خلاصه سفارش */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 rounded-2xl bg-white p-6 shadow-lg border border-gray-100">
-              <h2 className="text-xl font-bold text-gray-800 mb-6">Order Summary</h2>
+            <div className="sticky top-24 rounded-2xl bg-gray-900 p-6 shadow-lg border border-gray-700">
+              <h2 className="text-xl font-bold text-white mb-6">Order Summary</h2>
               
               {/* اطلاعات شعبه */}
-              <div className="mb-4 p-4 bg-emerald-50 rounded-xl">
+              <div className="mb-4 p-4 bg-emerald-950/30 rounded-xl">
                 <div className="flex items-center gap-3">
-                  <FiMapPin className="text-emerald-600" />
+                  <FiMapPin className="text-emerald-400" />
                   <div>
-                    <h3 className="font-semibold text-gray-800">{branchName} Branch</h3>
-                    <p className="text-sm text-gray-600">Order from {branchName}</p>
+                    <h3 className="font-semibold text-white">{branchName} Branch</h3>
+                    <p className="text-sm text-gray-300">Order from {branchName}</p>
                   </div>
                 </div>
               </div>
@@ -485,7 +509,7 @@ export default function BranchCheckoutPage({
               {/* آیتم‌های سفارش */}
               <div className="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
                 {items.map(item => (
-                  <div key={item.id} className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                  <div key={item.id} className="flex items-center gap-3 pb-3 border-b border-gray-700">
                     {item.imageUrl && (
                       <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg">
                         <Image
@@ -498,16 +522,16 @@ export default function BranchCheckoutPage({
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-gray-800 truncate">{item.name}</h4>
+                      <h4 className="font-medium text-white truncate">{item.name}</h4>
                       <div className="flex items-center justify-between mt-1">
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-gray-300">
                           Qty: {item.quantity}
                         </span>
-                        <span className="font-semibold text-emerald-600">
-                          ${(item.price * item.quantity).toFixed(2)}
+                        <span className="font-semibold text-emerald-400">
+                          ${((toCents(item.price) * item.quantity) / 100).toFixed(2)}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-gray-300 mt-1">
                         ${item.price.toFixed(2)} each
                       </div>
                     </div>
@@ -516,29 +540,34 @@ export default function BranchCheckoutPage({
               </div>
               
               {/* جمع کل */}
-              <div className="space-y-3 border-t border-gray-200 pt-4">
+              <div className="space-y-3 border-t border-gray-700 pt-4">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal ({totalItems} items)</span>
-                  <span className="font-medium">${totalPrice.toFixed(2)}</span>
+                  <span className="text-gray-300">Subtotal ({totalItems} items)</span>
+                  <span className="font-medium">${(itemsSubtotalCents / 100).toFixed(2)}</span>
                 </div>
                 
                 {form.delivery_type === 'delivery' && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Delivery Fee</span>
+                    <span className="text-gray-300">Delivery Fee</span>
                     <span className="font-medium">$5.00</span>
                   </div>
                 )}
+
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Tax (9%)</span>
+                  <span className="font-medium">${taxAmount.toFixed(2)}</span>
+                </div>
                 
-                <div className="flex justify-between text-lg font-bold pt-3 border-t border-gray-200">
-                  <span>Total Amount</span>
-                  <span className="text-emerald-600">${finalTotal.toFixed(2)}</span>
+                <div className="flex justify-between text-lg font-bold pt-3 border-t border-gray-700">
+                  <span className="text-white">Total Amount</span>
+                  <span className="text-emerald-400">${finalTotal.toFixed(2)}</span>
                 </div>
               </div>
 
               {/* نکات */}
-              <div className="mt-6 p-4 bg-blue-50 rounded-xl">
-                <h4 className="font-medium text-gray-800 mb-2">Important Notes:</h4>
-                <ul className="text-sm text-gray-600 space-y-1">
+              <div className="mt-6 p-4 bg-blue-950/30 rounded-xl">
+                <h4 className="font-medium text-white mb-2">Important Notes:</h4>
+                <ul className="text-sm text-gray-300 space-y-1">
                   <li>• Orders are processed within 30 minutes</li>
                   <li>• {form.delivery_type === 'delivery' ? 'Delivery' : 'Pickup'} time: 45-60 minutes</li>
                   <li>• For any changes, contact {branchName} branch</li>

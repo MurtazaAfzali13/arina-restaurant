@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
+import { isOrderExpired } from "@/lib/orderExpiry";
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("orders")
-      .select("id, branch_id, status, final_amount, created_at, customer_name, branches(name)")
+      .select("id, order_number, branch_id, status, final_amount, created_at, customer_name, branches(name)")
       .order("created_at", { ascending: false });
 
     if (isBranchManager) {
@@ -63,7 +64,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data || []);
+    const visibleOrders = (data || []).filter((o: any) => !isOrderExpired({ created_at: o.created_at, status: o.status }));
+    return NextResponse.json(visibleOrders);
   } catch (e: unknown) {
     console.error("Dashboard orders API error:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
